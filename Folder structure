@@ -1,0 +1,14 @@
+travel_journal_app/
+  app.py
+  db.py
+  llm.py
+  renderers.py
+  utils.py
+  requirements.txt
+  pages/
+    1_New_Entry.py
+    2_My_Journal.py
+    3_View_Entry.py
+  data/
+    media/
+    journal.db
