@@ -148,18 +148,19 @@ def generate_journal(payload: Dict[str, Any]) -> Dict[str, Any]:
     "- template must be one of: polaroid_trail, minimal_editorial, postcard_map.\n"
 )
 
-    user = {
-        "entry_date": payload["entry_date"],
-        "mood": payload["mood"],
-        "answers": payload["answers"],
-        "media_count": payload.get("media_count", 0),
-        "note": (
-            "Choose a short, clean title (not a full sentence). "
-            "Use British English. Don't invent facts. "
-            "If media_count is high, choose polaroid_trail. "
-            "If went_anywhere is true and a location exists, postcard_map is good."
-        ),
-    }
+   user = {
+    "entry_date": payload["entry_date"],
+    "mood": payload["mood"],
+    "answers": payload["answers"],
+    "media_count": payload.get("media_count", 0),
+    "style_notes": [
+        "Write with emotional nuance, not a report.",
+        "If a detail appears in highlights, don't repeat it verbatim in the story.",
+        "Use varied sentence length.",
+        "Keep it warm, grounded, and specific."
+    ],
+    "template_rules": "If went_anywhere is true and a clean location exists, postcard_map is preferred. If media_count is high, polaroid_trail is preferred."
+}
 
     try:
         resp = client.chat.completions.create(
