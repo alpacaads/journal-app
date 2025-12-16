@@ -1,43 +1,57 @@
 import os
-from typing import Any, Dict, List, Optional
+import json
+from typing import Any, Dict, List
+
 
 def _fallback_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
     entry_date = payload["entry_date"]
     mood = payload["mood"]
     answers = payload["answers"]
     media_count = payload.get("media_count", 0)
-    where_activity = answers.get("where_activity", "").strip()
 
-    went_anywhere = answers.get("went_anywhere", False)
-    where = answers.get("where", "").strip()
+    went_anywhere = bool(answers.get("went_anywhere", False))
+    where = (answers.get("where", "") or "").strip()
+    where_activity = (answers.get("where_activity", "") or "").strip()
 
-    memorable = answers.get("memorable", False)
-    memorable_text = answers.get("memorable_text", "").strip()
+    memorable = bool(answers.get("memorable", False))
+    memorable_text = (answers.get("memorable_text", "") or "").strip()
 
-    challenges = answers.get("challenges", False)
-    challenges_text = answers.get("challenges_text", "").strip()
-    handled_text = answers.get("handled_text", "").strip()
+    challenges = bool(answers.get("challenges", False))
+    challenges_text = (answers.get("challenges_text", "") or "").strip()
+    handled_text = (answers.get("handled_text", "") or "").strip()
 
-    new_people = answers.get("new_people", False)
-    new_people_text = answers.get("new_people_text", "").strip()
+    new_people = bool(answers.get("new_people", False))
+    new_people_text = (answers.get("new_people_text", "") or "").strip()
 
-    wins = answers.get("wins", False)
-    wins_text = answers.get("wins_text", "").strip()
+    wins = bool(answers.get("wins", False))
+    wins_text = (answers.get("wins_text", "") or "").strip()
 
-    learnings = answers.get("learnings", False)
-    learnings_text = answers.get("learnings_text", "").strip()
+    learnings = bool(answers.get("learnings", False))
+    learnings_text = (answers.get("learnings_text", "") or "").strip()
 
-    title_bits = []
+    mood_map = {
+        "Great": "a really good day",
+        "Good": "a solid day",
+        "Ok": "a steady day",
+        "Hard": "a heavy day",
+        "Rough": "a rough one",
+    }
+
+    title_bits: List[str] = []
     if went_anywhere and where:
         title_bits.append(where)
-    mood_map = {"Great": "a really good day", "Good": "a solid day", "Ok": "a steady day", "Hard": "a heavy day", "Rough": "a rough one"}
     title_bits.append(mood_map.get(mood, "today"))
     title = " • ".join(title_bits[:2]).title()
 
     paragraphs: List[str] = []
+
     opener = f"**{entry_date}** felt like {mood_map.get(mood, 'one of those days')}."
     if went_anywhere and where:
-        opener += f" I ended up heading to **{where}**, which gave the day a bit of shape."
+        opener += f" I ended up heading to **{where}**."
+        if where_activity:
+            opener += f" {where_activity}"
+        else:
+            opener += " It gave the day a bit of shape."
     if media_count:
         opener += f" I captured **{media_count}** moment{'s' if media_count != 1 else ''} along the way."
     paragraphs.append(opener)
@@ -99,6 +113,7 @@ def _fallback_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
         "template": template,
     }
 
+
 def generate_journal(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     If OPENAI_API_KEY exists and openai is installed, use it.
@@ -129,7 +144,12 @@ def generate_journal(payload: Dict[str, Any]) -> Dict[str, Any]:
         "mood": payload["mood"],
         "answers": payload["answers"],
         "media_count": payload.get("media_count", 0),
-        "note": "If media_count is high, choose polaroid_trail. If location exists and went_anywhere is true, postcard_map is good.",
+        "note": (
+            "Choose a short, clean title (not a full sentence). "
+            "Use British English. Don't invent facts. "
+            "If media_count is high, choose polaroid_trail. "
+            "If went_anywhere is true and a location exists, postcard_map is good."
+        ),
     }
 
     try:
@@ -139,58 +159,23 @@ def generate_journal(payload: Dict[str, Any]) -> Dict[str, Any]:
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system},
-                {"role": "user", "content": str(user)},
+                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
             ],
         )
-        import json
+
         content = resp.choices[0].message.content
         data = json.loads(content)
 
         for k in ["title", "story_markdown", "highlights", "theme", "template"]:
             if k not in data:
                 raise ValueError("Missing key: " + k)
-        return data
-    except Exception:
-        return _fallback_generate(payload)
 
-    client = OpenAI()
+        # Ensure highlights has required keys
+        hl = data.get("highlights") or {}
+        for hk in ["best_moment", "hardest_moment", "todays_win", "lesson"]:
+            hl.setdefault(hk, "")
+        data["highlights"] = hl
 
-    system = (
-        "You are a gifted travel-journal editor and scrapbook storyteller. "
-        "Write in British English. Keep it vivid, warm, and specific. "
-        "Avoid cliché. Do not invent facts not provided. "
-        "Output must be valid JSON with keys: title, story_markdown, highlights, theme, template. "
-        "highlights must include: best_moment, hardest_moment, todays_win, lesson. "
-        "theme must be one of: calm, energetic, cosy, adventurous. "
-        "template must be one of: polaroid_trail, minimal_editorial, postcard_map."
-    )
-
-    user = {
-        "entry_date": payload["entry_date"],
-        "mood": payload["mood"],
-        "answers": payload["answers"],
-        "media_count": payload.get("media_count", 0),
-        "note": "If media_count is high, choose polaroid_trail. If location exists and went_anywhere is true, postcard_map is good.",
-    }
-
-    resp = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        temperature=0.7,
-        response_format={"type": "json_object"},
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": str(user)},
-        ],
-    )
-
-    import json
-    content = resp.choices[0].message.content
-    try:
-        data = json.loads(content)
-        # Minimal validation & safe defaults
-        for k in ["title", "story_markdown", "highlights", "theme", "template"]:
-            if k not in data:
-                raise ValueError("Missing key: " + k)
         return data
     except Exception:
         return _fallback_generate(payload)
