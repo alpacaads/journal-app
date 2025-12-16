@@ -5,39 +5,47 @@ from typing import Any, Dict, List, Optional, Tuple
 DB_PATH = Path("data/journal.db")
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    entry_date TEXT NOT NULL,
+    mood TEXT NOT NULL,
+    answers_json TEXT NOT NULL,
+    status TEXT NOT NULL, -- draft | complete | generated
+    generated_json TEXT,  -- title/story/highlights/theme/template/layout
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(user_id, entry_date)
+);
+
+CREATE TABLE IF NOT EXISTS media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entry_id INTEGER NOT NULL,
+    media_type TEXT NOT NULL, -- photo | video
+    file_path TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY(entry_id) REFERENCES entries(id) ON DELETE CASCADE
+);
+"""
+
 def _conn() -> sqlite3.Connection:
+    # Ensure folder exists (Streamlit Cloud can start from scratch)
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON;")
+
+    # IMPORTANT: ensure schema exists no matter which page loads first
+    conn.executescript(_SCHEMA)
+
     return conn
 
 def init_db() -> None:
+    # Kept for compatibility; schema is already ensured in _conn()
     with _conn() as conn:
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            entry_date TEXT NOT NULL,
-            mood TEXT NOT NULL,
-            answers_json TEXT NOT NULL,
-            status TEXT NOT NULL, -- draft | complete | generated
-            generated_json TEXT,  -- title/story/highlights/theme/template/layout
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-            UNIQUE(user_id, entry_date)
-        );
-        """)
-
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS media (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            entry_id INTEGER NOT NULL,
-            media_type TEXT NOT NULL, -- photo | video
-            file_path TEXT NOT NULL,
-            original_name TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY(entry_id) REFERENCES entries(id) ON DELETE CASCADE
-        );
-        """)
+        conn.executescript(_SCHEMA)
 
 def upsert_entry(
     user_id: str,
