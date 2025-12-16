@@ -109,10 +109,50 @@ def generate_journal(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         from openai import OpenAI  # type: ignore
+        client = OpenAI()  # reads OPENAI_API_KEY from env/Streamlit Secrets
     except Exception:
         return _fallback_generate(payload)
 
-    client = OpenAI(api_key=api_key)
+    system = (
+        "You are a gifted travel-journal editor and scrapbook storyteller. "
+        "Write in British English. Keep it vivid, warm, and specific. "
+        "Avoid cliché. Do not invent facts not provided. "
+        "Output must be valid JSON with keys: title, story_markdown, highlights, theme, template. "
+        "highlights must include: best_moment, hardest_moment, todays_win, lesson. "
+        "theme must be one of: calm, energetic, cosy, adventurous. "
+        "template must be one of: polaroid_trail, minimal_editorial, postcard_map."
+    )
+
+    user = {
+        "entry_date": payload["entry_date"],
+        "mood": payload["mood"],
+        "answers": payload["answers"],
+        "media_count": payload.get("media_count", 0),
+        "note": "If media_count is high, choose polaroid_trail. If location exists and went_anywhere is true, postcard_map is good.",
+    }
+
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            temperature=0.7,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": str(user)},
+            ],
+        )
+        import json
+        content = resp.choices[0].message.content
+        data = json.loads(content)
+
+        for k in ["title", "story_markdown", "highlights", "theme", "template"]:
+            if k not in data:
+                raise ValueError("Missing key: " + k)
+        return data
+    except Exception:
+        return _fallback_generate(payload)
+
+    client = OpenAI()
 
     system = (
         "You are a gifted travel-journal editor and scrapbook storyteller. "
