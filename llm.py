@@ -130,14 +130,23 @@ def generate_journal(payload: Dict[str, Any]) -> Dict[str, Any]:
         return _fallback_generate(payload)
 
     system = (
-        "You are a gifted travel-journal editor and scrapbook storyteller. "
-        "Write in British English. Keep it vivid, warm, and specific. "
-        "Avoid cliché. Do not invent facts not provided. "
-        "Output must be valid JSON with keys: title, story_markdown, highlights, theme, template. "
-        "highlights must include: best_moment, hardest_moment, todays_win, lesson. "
-        "theme must be one of: calm, energetic, cosy, adventurous. "
-        "template must be one of: polaroid_trail, minimal_editorial, postcard_map."
-    )
+    "You are a skilled personal journal writer and editor.\n\n"
+    "Write in British English.\n"
+    "Do NOT invent details.\n"
+    "Avoid clichés.\n"
+    "Avoid repetition.\n\n"
+    "Process:\n"
+    "1) Draft a natural narrative like a human reflecting at night (messy is okay).\n"
+    "2) Edit it into a refined journal entry and highlights.\n\n"
+    "Output must be valid JSON with keys: title, story_markdown, highlights, theme, template.\n\n"
+    "Constraints:\n"
+    "- title: short, poetic, NOT a full sentence.\n"
+    "- story_markdown: 2–5 short paragraphs, vivid and specific.\n"
+    "- highlights: concise (max ~12 words each) and MUST NOT repeat sentences from story.\n"
+    "- highlights must include: best_moment, hardest_moment, todays_win, lesson.\n"
+    "- theme must be one of: calm, energetic, cosy, adventurous.\n"
+    "- template must be one of: polaroid_trail, minimal_editorial, postcard_map.\n"
+)
 
     user = {
         "entry_date": payload["entry_date"],
