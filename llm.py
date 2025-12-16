@@ -165,7 +165,7 @@ def generate_journal(payload: Dict[str, Any]) -> Dict[str, Any]:
     try:
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
-            temperature=0.7,
+            temperature=0.9,
             response_format={"type": "json_object"},
             messages=[
                 {"role": "system", "content": system},
