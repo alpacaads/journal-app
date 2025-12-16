@@ -27,9 +27,15 @@ colA, colB = st.columns([1, 1])
 
 with colA:
     went_anywhere = st.toggle("Did you go anywhere today?", value=False)
-    where = ""
-    if went_anywhere:
-        where = st.text_input("Where did you go?", placeholder="e.g., South Bank, Noosa, Mum’s place")
+where = ""
+where_activity = ""
+if went_anywhere:
+    where = st.text_input("Where did you go?", placeholder="e.g., Dayboro Showgrounds, South Bank, Noosa")
+    where_activity = st.text_area(
+        "What did you do there? (optional)",
+        height=80,
+        placeholder="e.g., Went for a jog, grabbed lunch, explored the markets.",
+    )
 
     memorable = st.toggle("Did you do something memorable?", value=False)
     memorable_text = ""
@@ -73,6 +79,7 @@ uploads = st.file_uploader(
 answers = {
     "went_anywhere": went_anywhere,
     "where": where,
+    "where_activity": where_activity,
     "memorable": memorable,
     "memorable_text": memorable_text,
     "challenges": challenges,
