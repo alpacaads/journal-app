@@ -6,6 +6,7 @@ def _fallback_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
     mood = payload["mood"]
     answers = payload["answers"]
     media_count = payload.get("media_count", 0)
+    where_activity = answers.get("where_activity", "").strip()
 
     went_anywhere = answers.get("went_anywhere", False)
     where = answers.get("where", "").strip()
