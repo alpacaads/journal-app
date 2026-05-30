@@ -385,6 +385,38 @@ const FACTIONS = {
   haven:'Haven', reaper:'The Reapers', remnant:'The Remnant',
 };
 
+// Pledge to one faction for real perks — and turn its rivals against you.
+// Reaper is the high-risk choice: allying them makes everyone else hostile.
+const FACTION_INFO = {
+  convoy:{ name:'The Convoy', rivals:['reaper'], pledgeAt:25,
+    perk:'the road burns less fuel and a Convoy gun-truck rides shotgun in your fights',
+    soldier:{ id:'cv_e', name:'Convoy Enforcer', art:'lurker', col:'',     base:{hp:20,atk:9,agi:5},  xp:18, scrap:12 },
+    quest:'A Reaper scout pack is shadowing our route. Run them down before they bring the whole Junkyard on us.' },
+  haven:{ name:'Haven', rivals:['reaper'], pledgeAt:25,
+    perk:'rest is always safe, medkits run cheap, and Haven marksmen blunt the first blow each round',
+    soldier:{ id:'hv_g', name:'Haven Guard', art:'lurker', col:'amber',    base:{hp:24,atk:9,agi:3},  xp:18, scrap:12 },
+    quest:'Something\'s been picking off our outer farms at night. Clear it out and the walls open to you.' },
+  reaper:{ name:'The Reapers', rivals:['haven','convoy','remnant'], pledgeAt:25,
+    perk:'brutal Reaper gear (+attack, +ram) and a raider at your back — but every other faction wants you dead',
+    soldier:{ id:'rp_r', name:'Reaper Raider', art:'stalker', col:'red',    base:{hp:22,atk:11,agi:4}, xp:20, scrap:15, pierce:true },
+    quest:'Prove you\'re not soft. There\'s a herd we use for blood-sport — wade in and thin it.' },
+  remnant:{ name:'The Remnant', rivals:['reaper'], pledgeAt:25,
+    perk:'the dead are an open book to you, you gain extra XP, and their serums steady your hand',
+    soldier:{ id:'rm_s', name:'Remnant Sentinel', art:'lurker', col:'blue', base:{hp:20,atk:8,agi:3},  xp:18, scrap:12 },
+    quest:'We need a fresh strain sample from a live specimen. Engage one and let our drones observe.' },
+};
+
+// Symmetric: you are hostile to a faction if it rivals your ally, or your ally rivals it.
+function factionRelation(f){
+  if(!S || !S.ally) return 'neutral';
+  if(S.ally===f) return 'ally';
+  const a=FACTION_INFO[S.ally], b=FACTION_INFO[f];
+  if((a && a.rivals.includes(f)) || (b && b.rivals.includes(S.ally))) return 'hostile';
+  return 'neutral';
+}
+function addRep(f,n){ if(S && S.rep && (f in S.rep)) S.rep[f]=clamp(S.rep[f]+n,-100,100); }
+function standingLabel(v){ return v>=60?'Trusted':v>=25?'Friendly':v>=0?'Known':v>-30?'Wary':'Hated'; }
+
 const WORLD = {
   start:'lot',
   regions:{
@@ -477,6 +509,8 @@ function freshState(arch, veh){
     objective:'Reach the coast. There are rumours of a boat.',
     // zombie evolution
     seenStrains:[], tactics:{melee:0, ram:0},
+    // factions
+    rep:{convoy:0, haven:0, reaper:0, remnant:0}, ally:null,
     surv:{
       name:a.name, perk:a.perk,
       maxHp:a.stats.maxHp, hp:a.stats.maxHp,
@@ -645,6 +679,15 @@ const UI = {
         <div class="modlist">${vMods.length?'<span class="tag">mods:</span> '+vMods.map(m=>'<b>'+m+'</b>').join(' · '):'<i>no mods yet</i>'}</div>
       </div>
       <div class="panel">
+        <div class="pt">FACTIONS ${S.ally?'// allied: <b>'+FACTION_INFO[S.ally].name+'</b>':''}</div>
+        <div class="modlist">${Object.keys(FACTION_INFO).map(f=>{
+          const rel=factionRelation(f); const v=S.rep[f];
+          const col = rel==='ally'?'var(--ink)':rel==='hostile'?'var(--red)':'var(--ink-dim)';
+          const tag = rel==='ally'?'★ ALLIED':rel==='hostile'?'⚔ hostile':standingLabel(v)+' ('+(v>=0?'+':'')+v+')';
+          return '<div style="color:'+col+'">'+FACTION_INFO[f].name+' — '+tag+'</div>';
+        }).join('')}</div>
+      </div>
+      <div class="panel">
         <div class="pt">SUPPLIES</div>
         <div class="modlist">⛭ Scrap <b>${S.scrap}</b> &nbsp;·&nbsp; ✚ Medkits <b>${S.inv.medkits}</b> &nbsp;·&nbsp; ⛽ Fuel cans <b>${S.inv.fuelcans}</b> &nbsp;·&nbsp; Miles <b>${S.miles}</b></div>
       </div>
@@ -728,7 +771,7 @@ const Game = {
 
   /* ---- routing: after any event, continue travel or return to the map ---- */
   resume(msg){
-    if(S.over) return;
+    if(!S || S.over) return;
     save();
     if(Game._travel) return Game.travelStep();
     return Game.worldMap(msg);
@@ -736,7 +779,7 @@ const Game = {
 
   /* ---- the open-world map (main hub) ---- */
   worldMap(msg){
-    if(S.over) return;
+    if(!S || S.over) return;
     save();
     UI.clear(); UI.hud();
     const r = WORLD.regions[S.loc];
@@ -744,9 +787,20 @@ const Game = {
     UI.speaker(r.name.toUpperCase(),'sys');
     UI.add('<span class="small">control: <b>'+FACTIONS[r.faction]+'</b> &nbsp;·&nbsp; threat <span style="color:var(--red)">'+threatDots(r.danger)+'</span> &nbsp;·&nbsp; mutation tier <b>'+Game.mutTier()+'</b></span>');
     UI.add(r.desc,'dim');
+    // faction standing in this territory
+    const fac = r.faction;
+    const isFac = fac in FACTION_INFO;
+    const rel = isFac ? factionRelation(fac) : 'neutral';
+    if(isFac){
+      const tag = rel==='ally' ? '<b style="color:var(--ink)">★ ALLIED</b>'
+                : rel==='hostile' ? '<b style="color:var(--red)">⚔ HOSTILE</b>'
+                : standingLabel(S.rep[fac])+' <span class="small">('+(S.rep[fac]>=0?'+':'')+S.rep[fac]+')</span>';
+      UI.add('<span class="small">standing with '+FACTION_INFO[fac].name+': '+tag+'</span>', rel==='hostile'?'bad':'');
+    }
     if(msg) UI.add(msg);
     if(S.fuel < 6) UI.add('⛽ Fuel critical — not enough to take the road.','warn');
     if(S.surv.hp < S.surv.maxHp*0.4) UI.add('✚ You\'re badly hurt.','bad');
+    if(isFac && rel==='hostile') UI.add('They know your colours here. No welcome at the gate — and their patrols haunt the roads out.','bad');
     UI.add('<span class="small">▸ objective: '+(S.objective||'Survive.')+'</span>','warn');
 
     const opts=[];
@@ -757,7 +811,20 @@ const Game = {
       rest:    { key:'✚', label:'REST &amp; REPAIR <span class="small">— patch up</span>', fn:()=>Game.rest() },
       intel:   { key:'☣', label:'TALK to the Remnant <span class="small">— intel &amp; story</span>', fn:()=>Game.intel() },
     };
-    (r.services||[]).forEach(s=>{ if(SVC[s]) opts.push(SVC[s]); });
+    // Hostile factions slam their doors; only scavenging the outskirts remains.
+    const facServiceBlocked = (s)=> isFac && rel==='hostile' && s!=='scavenge';
+    (r.services||[]).forEach(s=>{ if(SVC[s] && !facServiceBlocked(s)) opts.push(SVC[s]); });
+    // Faction job (rep) — at a settlement that isn't hostile to you
+    if(isFac && r.type==='settlement' && rel!=='hostile'){
+      opts.push({ key:'✦', cls:'pickup', label:'Take a job for '+FACTION_INFO[fac].name+' <span class="small">— earn standing</span>', fn:()=>Game.factionJob(fac) });
+    }
+    // Pledge / defect — when you're trusted enough and not already sworn here
+    if(isFac && r.type==='settlement' && rel!=='hostile' && S.ally!==fac && S.rep[fac] >= FACTION_INFO[fac].pledgeAt){
+      const defect = !!S.ally;
+      opts.push({ key:'⚑', cls:'danger',
+        label:(defect?'Defect — pledge to ':'Pledge allegiance to ')+FACTION_INFO[fac].name+' <span class="small">'+(defect?'— betrays '+FACTION_INFO[S.ally].name:'— unlocks their perks, makes rivals hostile')+'</span>',
+        fn:()=>Game.pledge(fac) });
+    }
     if(S.inv.fuelcans>0) opts.push({ key:'⛽', cls:'pickup', label:'Use a fuel can <span class="small">+30 fuel</span>',
       fn:()=>{ S.inv.fuelcans--; S.fuel=Math.min(S.veh.fuelMax,S.fuel+30); UI.toast('+30 fuel','blue'); Game.worldMap(); } });
 
@@ -792,7 +859,8 @@ const Game = {
     if(t.leg >= t.legs){ Game._travel=null; return Game.arrive(t.dest); }
     t.leg++;
     const dest = WORLD.regions[t.dest];
-    const burn = 4 + rnd(3);
+    let burn = 4 + rnd(3);
+    if(S.ally==='convoy') burn = Math.max(2, burn-2); // Convoy fuel economy
     S.fuel = Math.max(0, S.fuel - burn);
     S.miles += 1;
     S.danger = dest.danger + Math.floor(S.miles/15) + (S.endless?3:0);
@@ -800,6 +868,10 @@ const Game = {
     if(S.fuel <= 0) return Game.stranded();
     UI.clear(); UI.art('road');
     await UI.type('Leg '+t.leg+'/'+t.legs+' toward <b>'+dest.name+'</b>. The engine drinks '+burn+' fuel. <span class="small">('+S.miles+' mi)</span>');
+    // hostile-faction patrols hunt their own turf
+    if(S.ally && factionRelation(dest.faction)==='hostile' && chance(32)){
+      return Game.combat(false, {patrol:dest.faction});
+    }
     let ambush = 26 + S.danger*2;
     if(S.veh.flags.tires) ambush/=2;
     const roll = rnd(100);
@@ -872,13 +944,14 @@ const Game = {
     UI.clear(); UI.art('camp','amber');
     UI.speaker(FACTIONS[r.faction].toUpperCase()+' MARKET','sys');
     UI.add('Scrap on hand: <b>'+S.scrap+' ⛭</b>','dim');
+    const havenAlly = S.ally==='haven';
     function item(name, desc, cost, fn, disabled){
       return { key:'⛭', cls:'pickup', cost:cost+' ⛭', disabled:disabled || S.scrap<cost,
         label:'<b>'+name+'</b><br><span class="small">'+desc+'</span>',
-        fn:()=>{ S.scrap-=cost; fn(); UI.toast('Bought '+name,'amber'); save(); Game.market(); } };
+        fn:()=>{ S.scrap-=cost; fn(); if(r.faction in FACTION_INFO) addRep(r.faction,1); UI.toast('Bought '+name,'amber'); save(); Game.market(); } };
     }
     const opts=[];
-    opts.push(item('Medkit ✚','heal ~40% mid-fight',18,()=>{ S.inv.medkits++; }));
+    opts.push(item('Medkit ✚', havenAlly?'heal ~40% mid-fight · Haven price':'heal ~40% mid-fight', havenAlly?10:18, ()=>{ S.inv.medkits++; }));
     opts.push(item('Fuel can ⛽','+30 fuel, stored for later',14,()=>{ S.inv.fuelcans++; }));
     const topup = Math.max(1, Math.ceil((S.veh.fuelMax-S.fuel)/3));
     opts.push(item('Top up the tank','fill fuel to max now',topup,()=>{ S.fuel=S.veh.fuelMax; }, S.fuel>=S.veh.fuelMax));
@@ -905,6 +978,35 @@ const Game = {
     }
     save();
     UI.tapToContinue(()=>{ if(S.surv.xp>=S.surv.xpNext) Game.levelUp(); else Game.worldMap(); });
+  },
+
+  /* ---- pledge allegiance to a faction (active alliance + consequences) ---- */
+  async pledge(f){
+    const info = FACTION_INFO[f];
+    const prev = S.ally;
+    UI.clear(); UI.art('camp','amber');
+    UI.speaker('ALLEGIANCE','sys');
+    if(prev && prev!==f){ addRep(prev,-60); }
+    S.ally = f; addRep(f,15);
+    await UI.type('You throw in with <b>'+info.name+'</b>. From here out, '+info.perk+'.','good');
+    const rivals = info.rivals.filter(x=>x in FACTION_INFO).map(x=>FACTION_INFO[x].name);
+    if(rivals.length) await UI.type(rivals.join(' and ')+' will treat you as an enemy now — gates closed, patrols hunting the roads.','warn');
+    if(prev && prev!==f) await UI.type(FACTION_INFO[prev].name+' will not forget that you turned your coat.','bad');
+    save();
+    UI.tapToContinue(()=>Game.worldMap());
+  },
+
+  /* ---- a faction job: fight for standing ---- */
+  async factionJob(f){
+    const info = FACTION_INFO[f];
+    UI.clear(); UI.art('camp','amber');
+    UI.speaker(info.name.toUpperCase()+' — A JOB','sys');
+    await UI.type('"'+info.quest+'"');
+    await UI.type('Do it and there\'s scrap and standing in it for you.','dim');
+    UI.setChoices([
+      { key:1, cls:'danger', label:'Take the job <span class="small">— fight for it</span>', fn:()=>Game.combat(false,{quest:f}) },
+      { key:2, label:'Not now', fn:()=>Game.worldMap() },
+    ]);
   },
 
   /* ---- the finale at the Pier ---- */
@@ -1116,9 +1218,20 @@ const Game = {
       evasion:tpl.evasion||0, explode:tpl.explode||0, elite:!!tpl.elite, exploded:false };
   },
 
-  combat(boss){
+  combat(boss, opts){
+    if(!S || S.over) return;
+    opts = opts || {};
     const mt = Game.mutTier();
     const scale = 1 + S.danger*0.16 + mt*0.05;
+    // Faction patrol — human enemies, not the dead.
+    if(opts.patrol){
+      const sol = FACTION_INFO[opts.patrol].soldier;
+      const pn = 1 + rnd(2) + Math.floor(S.danger/4);
+      const pfoes=[]; const pb={xp:0,scrap:0};
+      for(let i=0;i<pn;i++){ pfoes.push(Game.mkFoe(sol, scale, 0)); pb.xp+=sol.xp; pb.scrap+=sol.scrap; }
+      Game._cb = { foes:pfoes, boss:false, turn:1, summonsLeft:0, bounty:pb, mt, scale, patrol:opts.patrol, human:true, quest:null };
+      return Game.combatIntro();
+    }
     const pool = ZOMBIES.filter(z=>!z.elite && z.tier<=mt);
     const n = boss ? 3+rnd(3)+Math.floor(mt/3) : 1+rnd(Math.min(4,1+Math.floor(S.danger/2)));
     // adaptation: the dead lean toward whatever counters your habits
@@ -1142,7 +1255,7 @@ const Game = {
       foes.push(Game.mkFoe(tpl, scale, boss?20:0));
       bounty.xp += tpl.xp; bounty.scrap += tpl.scrap;
     }
-    Game._cb = { foes, boss, turn:1, summonsLeft:3+mt, bounty, mt, scale };
+    Game._cb = { foes, boss, turn:1, summonsLeft:3+mt, bounty, mt, scale, quest:opts.quest||null };
     Game.combatIntro();
   },
 
@@ -1150,10 +1263,15 @@ const Game = {
     const cb=Game._cb;
     UI.clear();
     UI.art(cb.boss?'horde':cb.foes[0].tpl.art, cb.foes[0].tpl.col || (cb.boss?'red':''));
-    UI.speaker(cb.boss?'THE HORDE':'CONTACT','enemy');
-    await UI.type(cb.boss
-      ? 'They come from everywhere at once — '+cb.foes.length+' of them, and one big enough to block out the sky.'
-      : (cb.foes.length>1?cb.foes.length+' of them peel off a wreck and come for you.':'A '+cb.foes[0].name+' fixes on you and charges.'));
+    if(cb.patrol){
+      UI.speaker(FACTION_INFO[cb.patrol].name.toUpperCase()+' PATROL','enemy');
+      await UI.type('Headlights flare across the road — '+cb.foes.length+' of '+FACTION_INFO[cb.patrol].name+'\'s killers, and they\'ve marked your colours. No talking your way out of this one.');
+    } else {
+      UI.speaker(cb.boss?'THE HORDE':'CONTACT','enemy');
+      await UI.type(cb.boss
+        ? 'They come from everywhere at once — '+cb.foes.length+' of them, and one big enough to block out the sky.'
+        : (cb.foes.length>1?cb.foes.length+' of them peel off a wreck and come for you.':'A '+cb.foes[0].name+' fixes on you and charges.'));
+    }
 
     // Telegraph any strain you've never seen before — escalating dread.
     const fresh=[];
@@ -1223,7 +1341,7 @@ const Game = {
   },
 
   rollSurvDamage(){
-    let dmg = S.surv.atk + rnd(6);
+    let dmg = S.surv.atk + rnd(6) + (S.ally==='reaper'?3:0); // Reaper gear
     let crit=false;
     if(chance(S.surv.crit)){ dmg=Math.round(dmg*2); crit=true; }
     if(S.surv.flags.berserk && S.surv.hp < S.surv.maxHp/3) dmg=Math.round(dmg*1.6);
@@ -1255,7 +1373,7 @@ const Game = {
   async playerRam(){
     const cb=Game._cb;
     S.tactics.ram++;
-    let dmg = S.veh.ram + rnd(6) + (S.veh.flags.plow?S.veh.speed:0);
+    let dmg = S.veh.ram + rnd(6) + (S.veh.flags.plow?S.veh.speed:0) + (S.ally==='reaper'?4:0);
     UI.clear();
     UI.speaker(S.veh.name,'');
     const f=cb.foes[0];
@@ -1320,6 +1438,18 @@ const Game = {
       }
       if(summoned) await UI.type('A Screamer\'s shriek splits the air — '+summoned+' more dead claw out of the dark to answer it!','bad');
     }
+    // allied-faction backup
+    if(S.ally && cb.foes.length){
+      const t=cb.foes[0];
+      if(S.ally==='convoy'){ const d=8+S.danger; t.hp-=d; UI.add('A Convoy gun-truck roars past and rakes the '+t.name+' for '+d+'.','dim'); }
+      else if(S.ally==='reaper'){ const d=6+rnd(6); t.hp-=d; UI.add('Your Reaper escort buries a cleaver in the '+t.name+' for '+d+'.','dim'); }
+      else if(S.ally==='remnant'){ if(S.surv.hp<S.surv.maxHp){ const h=5; S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); UI.add('A Remnant serum steadies you. <span class="small">+'+h+' HP</span>','dim'); } }
+      await Game.resolveDeaths();
+      UI.hud();
+      if(S.surv.hp<=0 || S.veh.integ<=0) return UI.tapToContinue(()=>Game.death());
+      if(cb.foes.length===0) return UI.tapToContinue(()=>Game.victory());
+    }
+    let guardReady = (S.ally==='haven'); // Haven marksmen blunt the first blow
     for(const f of cb.foes){
       if(S.surv.hp<=0||S.veh.integ<=0) break;
       // dodge?
@@ -1335,7 +1465,8 @@ const Game = {
       } else {
         let def = S.surv.def + (S.surv.perk==='tough'?1:0);
         if(f.pierce) def=Math.floor(def/2);
-        const taken=Math.max(1,dmg-def);
+        let taken=Math.max(1,dmg-def);
+        if(guardReady){ const blunted=Math.max(0,Math.floor(taken/2)); guardReady=false; UI.add('Haven marksmen stitch the '+f.name+' mid-lunge — the blow lands half-spent.','dim'); taken=blunted; }
         S.surv.hp=Math.max(0,S.surv.hp-taken);
         await UI.type('The '+f.name+' tears into you. <span class="small">−'+taken+' HP</span>','bad');
       }
@@ -1369,16 +1500,27 @@ const Game = {
 
   async victory(){
     const cb=Game._cb;
+    if(S.surv.hp<=0 || S.veh.integ<=0) return Game.death(); // never "win" already dead
     if(S._pierBoss){ S._pierBoss=false; return Game.win(); }
     UI.clear();
     UI.art('skull','dim');
     UI.speaker('CLEARED','sys');
     // rewards scale with the bounty of everything that turned up (summons included)
     const bounty = cb.bounty || {xp:8,scrap:5};
-    const xp = Math.round(bounty.xp * (1 + S.danger*0.05)) + rnd(6);
+    const xpMult = (1 + S.danger*0.05) * (S.ally==='remnant'?1.25:1); // Remnant study bonus
+    const xp = Math.round(bounty.xp * xpMult) + rnd(6);
     const scrap = Math.round(bounty.scrap * (1 + S.danger*0.04)) + S.surv.scav*2 + rnd(4);
     S.surv.xp += xp; S.scrap += scrap;
-    await UI.type('The last of them stops twitching. You\'re still breathing. <span class="small">+'+xp+' XP · +'+scrap+' scrap</span>','good');
+    await UI.type(cb.patrol
+      ? 'The last of '+FACTION_INFO[cb.patrol].name+'\'s patrol drops. Costly enemies to make. <span class="small">+'+xp+' XP · +'+scrap+' scrap</span>'
+      : 'The last of them stops twitching. You\'re still breathing. <span class="small">+'+xp+' XP · +'+scrap+' scrap</span>','good');
+    // faction job complete — standing reward
+    if(cb.quest && (cb.quest in FACTION_INFO)){
+      addRep(cb.quest, 20);
+      const bonus = 10 + S.danger;
+      S.scrap += bonus;
+      await UI.type('Job done for '+FACTION_INFO[cb.quest].name+'. They won\'t forget it. <span class="small">+20 standing · +'+bonus+' scrap</span>','loot');
+    }
     // second wind
     if(S.surv.flags.secondWind){ const h=Math.round(S.surv.maxHp*0.18); S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); UI.toast('Second Wind +'+h+' HP','red'); }
     // vehicle autorepair
