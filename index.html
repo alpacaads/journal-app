@@ -338,26 +338,86 @@ const ZOMBIES = [
   { id:'spitter',name:'Spitter',art:'walker', col:'blue', base:{hp:18,atk:9,agi:3}, xp:16, scrap:8, armorPierce:true },
 ];
 
-// Authored milestone story beats (every MILESTONE miles).
-const MILESTONE = 20;
-const STORY = [
-  { mi:20, speaker:'RADIO', cls:'', art:'sun', lines:[
-    'The dashboard radio coughs to life on its own.',
-    '"...if anyone hears this... the coast. There\'s a boat at the coast. Keep driving. Don\'t stop for the dead, don\'t stop for the living..."',
-    'Then static. But it\'s a direction. It\'s something.' ] },
-  { mi:40, speaker:'SURVIVOR', cls:'', art:'skull', lines:[
-    'A bridge, choked with rusted cars. Bodies in every one.',
-    'Someone spray-painted on the asphalt: THE COAST IS A LIE.',
-    'You grip the wheel a little tighter and drive over it anyway.' ] },
-  { mi:60, speaker:'???', cls:'enemy', art:'horde', lines:[
-    'The road dips into a valley and the valley is MOVING.',
-    'Thousands of them. A tide of grey. This is what the radio was running from.',
-    'No way around. Only through. Bury the pedal.' ] },
-  { mi:80, speaker:'RADIO', cls:'', art:'sun', lines:[
-    'You can smell salt now. Real salt, on real wind.',
-    'The radio, clearer than ever: "Last boat leaves at the red dawn. We see your headlights. Drive. DRIVE."',
-    'The coast. It was real. Just a little further.' ] },
-];
+/* ---- THE OPEN WORLD: a map of regions you choose to drive between ---- */
+const FACTIONS = {
+  none:'no one', contested:'contested', convoy:'The Convoy',
+  haven:'Haven', reaper:'The Reapers', remnant:'The Remnant',
+};
+
+const WORLD = {
+  start:'lot',
+  regions:{
+    lot:{ token:'A', name:'The Lot', type:'ruin', danger:1, faction:'none',
+      desc:'The dead dealership where you found the car. Picked over, but quiet.',
+      links:['rust','under'], services:['scavenge','garage','rest'] },
+    rust:{ token:'B', name:'Rustbelt Highway', type:'highway', danger:2, faction:'none',
+      desc:'Miles of seized traffic and rusting steel. Good salvage, bad sightlines.',
+      links:['lot','suburb','mall'], services:['scavenge'] },
+    suburb:{ token:'C', name:'Greyfield Suburbs', type:'ruin', danger:2, faction:'none',
+      desc:'Cul-de-sacs of broken homes. The dead still wander the lawns.',
+      links:['rust','junk'], services:['scavenge','rest'] },
+    under:{ token:'D', name:'The Underpass', type:'settlement', danger:2, faction:'convoy',
+      desc:'A nomad camp of welded trucks beneath a freeway. The Convoy runs it.',
+      links:['lot','junk','cross'], services:['market','garage','rest'],
+      firstVisit:[
+        'A woman in a fuel-stained jacket leans on your hood before you\'ve even stopped.',
+        '"Nice heap. The Convoy could use another driver." She raps the roof. "Parts, fuel, backup on the road — we look after our own. Think on it."'] },
+    mall:{ token:'E', name:'The Dead Mall', type:'ruin', danger:3, faction:'none',
+      desc:'A cathedral of consumption gone to rot. Rich pickings, thick crowds.',
+      links:['rust','haven','flood'], services:['scavenge'] },
+    haven:{ token:'F', name:'Haven', type:'settlement', danger:1, faction:'haven',
+      desc:'Walls, gardens, gun towers. The closest thing to "before". They trade fair.',
+      links:['mall','cross','lab'], services:['market','rest','garage'],
+      firstVisit:[
+        'Gun towers track you to the gate — then a green flag drops. Inside: children, gardens, the smell of actual bread.',
+        'A guard nods you through. "Haven trades fair and shoots straight. Don\'t make us do the second one."'] },
+    junk:{ token:'G', name:'Reaper Junkyard', type:'settlement', danger:3, faction:'reaper',
+      desc:'A fortress of scrap ruled by raiders. Dangerous to enter, deadly to cross.',
+      links:['suburb','under','cross'], services:['market','garage'],
+      firstVisit:[
+        'Spotlights pin the car. Chains rattle down from towers of crushed steel.',
+        'A voice booms, almost friendly: "Welcome to the Junkyard, fresh meat. The Reapers don\'t do charity — but we sell the best ways to kill. Browse. Or bleed."'] },
+    flood:{ token:'H', name:'The Floodplains', type:'wild', danger:4, faction:'none',
+      desc:'Drowned farmland under a low grey sky. Things move beneath the water.',
+      links:['mall','coast'], services:['scavenge'] },
+    cross:{ token:'I', name:'Greywater Cross', type:'crossroads', danger:3, faction:'contested',
+      desc:'Where every road meets — and every faction watches. Tense, contested ground.',
+      links:['under','haven','junk','lab'], services:['scavenge','rest'] },
+    coast:{ token:'J', name:'Coastal Ruins', type:'ruin', danger:4, faction:'none',
+      desc:'Salt-eaten resort towns. You can smell the sea from here. Real sea.',
+      links:['flood','lab','pier'], services:['scavenge'] },
+    lab:{ token:'L', name:'The Remnant Lab', type:'settlement', danger:3, faction:'remnant',
+      desc:'A half-buried research station. The Remnant still study the dead here.',
+      links:['cross','haven','coast','pier'], services:['intel','rest'],
+      firstVisit:[
+        'Blast doors grind open into sterile white. A masked scientist studies you like a specimen.',
+        '"You\'re still uninfected. Good. We\'re close — closer than anyone. The dead are changing, driver. We can tell you how. And we can tell you where the boat really is."'] },
+    pier:{ token:'K', name:'The Pier', type:'goal', danger:5, faction:'none',
+      desc:'The end of the road. Open water, and whatever waits between you and the boat.',
+      links:['coast','lab'], services:[] },
+  }
+};
+
+// Decorative ASCII world map. Each [X] token is stamped at render time.
+const MAP_TEMPLATE =
+`  ~ INLAND ~~~~~~~~~~~~~ THE COAST ~
+   [A]--[B]--[E]--[H]   ~  ~  ~  ~
+    |    |    |    |      the dead
+   [D]  [C]   |   [J]---------.  sea
+    |    |    |    |          |
+   [I]--[G]  [F]  [L]-------[K]
+                            pier`;
+
+function renderMap(){
+  let m = MAP_TEMPLATE;
+  for(const id in WORLD.regions){
+    const r = WORLD.regions[id];
+    const g = (id===S.loc) ? '[@]' : (S.discovered.includes(id) ? '['+r.token+']' : '[?]');
+    m = m.replace('['+r.token+']', g);
+  }
+  return m;
+}
+function threatDots(n){ return '!'.repeat(Math.min(5,n)); }
 
 /* ----------------------------- STATE ----------------------------------- */
 const SAVE_KEY = 'dead_miles_save_v1';
@@ -369,7 +429,11 @@ function freshState(arch, veh){
   const gear = a.perk==='gearhead';
   const st = {
     miles:0, scrap:gear?15:8, fuel:Math.round(v.stats.fuelMax*0.6),
-    nextStory:0, danger:1,
+    danger:1,
+    // open world
+    loc:WORLD.start, visited:[WORLD.start], discovered:[WORLD.start].concat(WORLD.regions[WORLD.start].links),
+    seenBeats:[], endless:false,
+    objective:'Reach the coast. There are rumours of a boat.',
     surv:{
       name:a.name, perk:a.perk,
       maxHp:a.stats.maxHp, hp:a.stats.maxHp,
@@ -427,6 +491,13 @@ const UI = {
     const pre = document.createElement('pre');
     pre.className = 'art ' + (col||'');
     pre.textContent = ART[name] || '';
+    this.scene.appendChild(pre);
+    this._scroll();
+  },
+  artText(str, col){
+    const pre = document.createElement('pre');
+    pre.className = 'art ' + (col||'');
+    pre.textContent = str;
     this.scene.appendChild(pre);
     this._scroll();
   },
@@ -551,7 +622,7 @@ const Game = {
     UI.add('You and a junk car against a dead world.', 'dim');
     UI.add('Upgrade both. Drive forever. See how far you get.', 'dim');
     const opts=[];
-    if(hasSave()) opts.push({label:'CONTINUE',key:'▸',fn:()=>{ if(load()){ UI.hud(); Game.road("Back on the road."); } }});
+    if(hasSave()) opts.push({label:'CONTINUE',key:'▸',fn:()=>{ if(load()){ UI.hud(); Game.resume("Back on the road."); } }});
     opts.push({label:'NEW GAME',key:'▸',fn:()=>Game.intro()});
     if(hasSave()) opts.push({label:'Abandon save & start fresh',key:'✕',cls:'danger',fn:()=>{ wipe(); Game.intro(); }});
     opts.push({label:'How to play',key:'?',fn:()=>Game.help()});
@@ -561,12 +632,12 @@ const Game = {
   help(){
     UI.clear();
     UI.speaker('FIELD MANUAL','sys');
-    UI.add('• <b>DRIVE</b> to cover miles toward the coast. Each mile burns fuel and risks an encounter.','dim');
-    UI.add('• <b>FIGHT</b> with your Survivor (melee) and your Vehicle (ram). Both have their own stats.','dim');
-    UI.add('• <b>SCRAP ⛭</b> buys upgrades & repairs. <b>FUEL ⛽</b> keeps you moving — run dry and you\'re stranded.','dim');
-    UI.add('• <b>LEVEL UP</b> your survivor to pick new perks. Use the <b>GARAGE</b> to bolt mods onto your ride.','dim');
-    UI.add('• Tap <b>STATUS</b> (top right) anytime to see your build. Everything auto-saves.','dim');
-    UI.add('• It\'s endless. There is no winning, only further. Good luck.','warn');
+    UI.add('• The <b>MAP</b> is your hub. Pick a <b>road</b> to drive to a connected region — each leg burns fuel and risks an encounter.','dim');
+    UI.add('• <b>SETTLEMENTS</b> (Convoy, Haven, Reapers, Remnant) have markets, garages, and safe rest. <b>RUINS</b> &amp; <b>WILDS</b> are for scavenging — and dying.','dim');
+    UI.add('• <b>FIGHT</b> with your Survivor (melee) and your Vehicle (ram). Both level &amp; upgrade independently, endlessly.','dim');
+    UI.add('• <b>SCRAP ⛭</b> buys upgrades &amp; goods. <b>FUEL ⛽</b> keeps you moving — run dry on the road and you\'re stranded.','dim');
+    UI.add('• Tap <b>STATUS</b> (top right) anytime to see your build. Everything auto-saves to this device.','dim');
+    UI.add('• Find the boat. Reach the Pier. Then survival mode never ends. Good luck, driver.','warn');
     UI.tapToContinue(()=>Game.title());
   },
 
@@ -608,88 +679,216 @@ const Game = {
     UI.art('car','blue');
     await UI.type(`You slide into the <b>${S.veh.name}</b>. The seat is somebody else's. You don't think about that.`);
     await UI.type('Key. Turn. Cough. Roar. The dead three lots over lift their heads.');
-    await UI.type('You point the hood at the horizon and go.');
-    UI.tapToContinue(()=>Game.road('The road unrolls ahead, cracked and endless.'));
+    await UI.type('You point the hood at the open road. Somewhere out there is a way out of all this. Time to go find it.');
+    UI.tapToContinue(()=>Game.worldMap('You pull out of the lot. The whole dead world is yours to cross.'));
   },
 
-  /* ---- the road hub ---- */
-  road(intro){
+  /* ---- routing: after any event, continue travel or return to the map ---- */
+  resume(msg){
     if(S.over) return;
     save();
-    UI.clear();
-    UI.hud();
-    UI.art('road');
-    if(intro) UI.add(intro,'dim');
-    const lowFuel = S.fuel < 8;
-    const lowHp = S.surv.hp < S.surv.maxHp*0.4;
-    if(lowFuel) UI.add('⛽ The fuel needle is kissing empty.','warn');
-    if(lowHp) UI.add('✚ You\'re hurt. Badly.','bad');
-    UI.add('<span class="small">Mile '+S.miles+' · next landmark in '+(MILESTONE-(S.miles%MILESTONE))+' mi</span>');
+    if(Game._travel) return Game.travelStep();
+    return Game.worldMap(msg);
+  },
 
-    const opts=[
-      { label:'DRIVE ON <span class="small">— cover ground (−fuel)</span>', key:'▸',
-        disabled:S.fuel<2, fn:()=>Game.drive() },
-      { label:'SCAVENGE the roadside <span class="small">— risk it for loot</span>', key:'⛭', fn:()=>Game.scavenge() },
-      { label:'GARAGE <span class="small">— upgrade your ride</span>', key:'⚒', fn:()=>Game.garage() },
-      { label:'REST &amp; REPAIR <span class="small">— patch up, risk an ambush</span>', key:'✚', fn:()=>Game.rest() },
-    ];
-    if(S.inv.fuelcans>0) opts.push({ label:'Use a fuel can <span class="small">— +30 fuel</span>', key:'⛽', cls:'pickup',
-      fn:()=>{ S.inv.fuelcans--; S.fuel=Math.min(S.veh.fuelMax,S.fuel+30); UI.toast('+30 fuel','blue'); Game.road(); } });
-    opts.push({ label:'Save &amp; quit to title', key:'✕', cls:'danger', fn:()=>{ save(); Game.title(); } });
+  /* ---- the open-world map (main hub) ---- */
+  worldMap(msg){
+    if(S.over) return;
+    save();
+    UI.clear(); UI.hud();
+    const r = WORLD.regions[S.loc];
+    UI.artText(renderMap());
+    UI.speaker(r.name.toUpperCase(),'sys');
+    UI.add('<span class="small">control: <b>'+FACTIONS[r.faction]+'</b> &nbsp;·&nbsp; threat <span style="color:var(--red)">'+threatDots(r.danger)+'</span></span>');
+    UI.add(r.desc,'dim');
+    if(msg) UI.add(msg);
+    if(S.fuel < 6) UI.add('⛽ Fuel critical — not enough to take the road.','warn');
+    if(S.surv.hp < S.surv.maxHp*0.4) UI.add('✚ You\'re badly hurt.','bad');
+    UI.add('<span class="small">▸ objective: '+(S.objective||'Survive.')+'</span>','warn');
 
-    if(S.fuel<2){
-      UI.add('Out of fuel. If you can\'t find more, this is where you die.','bad');
-    }
+    const opts=[];
+    const SVC={
+      scavenge:{ key:'⛭', label:'SCAVENGE here <span class="small">— risk it for loot</span>', fn:()=>Game.scavenge() },
+      garage:  { key:'⚒', label:'GARAGE <span class="small">— upgrade the ride</span>', fn:()=>Game.garage() },
+      market:  { key:'⛁', label:'MARKET <span class="small">— trade scrap for goods</span>', fn:()=>Game.market() },
+      rest:    { key:'✚', label:'REST &amp; REPAIR <span class="small">— patch up</span>', fn:()=>Game.rest() },
+      intel:   { key:'☣', label:'TALK to the Remnant <span class="small">— intel &amp; story</span>', fn:()=>Game.intel() },
+    };
+    (r.services||[]).forEach(s=>{ if(SVC[s]) opts.push(SVC[s]); });
+    if(S.inv.fuelcans>0) opts.push({ key:'⛽', cls:'pickup', label:'Use a fuel can <span class="small">+30 fuel</span>',
+      fn:()=>{ S.inv.fuelcans--; S.fuel=Math.min(S.veh.fuelMax,S.fuel+30); UI.toast('+30 fuel','blue'); Game.worldMap(); } });
+
+    opts.push({ key:'', cls:'disabled', disabled:true, label:'<span class="small">— — ROADS FROM HERE — —</span>', fn:()=>{} });
+    const canGo = S.fuel >= 6;
+    r.links.forEach(id=>{
+      const d = WORLD.regions[id];
+      const known = S.discovered.includes(id) && S.visited.includes(id);
+      const seen = S.discovered.includes(id);
+      const name = seen ? d.name : 'Uncharted road';
+      const meta = seen ? ('· '+FACTIONS[d.faction]+' · threat <span style="color:var(--red)">'+threatDots(d.danger)+'</span>') : '· unknown territory';
+      opts.push({ key:'→', disabled:!canGo,
+        label:'<b>'+name+'</b> <span class="small">'+meta+'</span>'+(canGo?'':' <span class="small">[no fuel]</span>'),
+        fn:()=>Game.travel(id) });
+    });
+    if(!canGo) opts.push({ key:'⛽', cls:'danger', label:'SEARCH for fuel <span class="small">— desperate, risky</span>', fn:()=>Game.searchFuel() });
+    opts.push({ key:'✕', cls:'danger', label:'Save &amp; quit to title', fn:()=>{ save(); Game.title(); } });
     UI.setChoices(opts);
   },
 
-  /* ---- driving: consume fuel, advance, roll event ---- */
-  async drive(){
-    UI.clear();
-    UI.art('road');
+  /* ---- travel between regions: a chain of road encounters ---- */
+  travel(destId){
+    Game._travel = { dest:destId, legs:2+rnd(2), leg:0 };
+    UI.toast('Setting out for '+WORLD.regions[destId].name);
+    Game.travelStep();
+  },
+
+  async travelStep(){
+    const t = Game._travel;
+    if(!t) return Game.worldMap();
+    if(S.surv.hp<=0 || S.veh.integ<=0) return;
+    if(t.leg >= t.legs){ Game._travel=null; return Game.arrive(t.dest); }
+    t.leg++;
+    const dest = WORLD.regions[t.dest];
     const burn = 4 + rnd(3);
     S.fuel = Math.max(0, S.fuel - burn);
     S.miles += 1;
-    S.danger = 1 + Math.floor(S.miles/12);
+    S.danger = dest.danger + Math.floor(S.miles/15) + (S.endless?3:0);
     UI.hud();
-    await UI.type('Miles tick by. The engine drinks '+burn+' fuel. <span class="small">('+S.miles+' mi)</span>');
-
-    // milestone story beat?
-    if(S.miles % MILESTONE === 0 && S.nextStory < STORY.length){
-      return Game.storyBeat();
-    }
-    // roll an encounter
-    let ambush = 28 + S.danger*2;
+    if(S.fuel <= 0) return Game.stranded();
+    UI.clear(); UI.art('road');
+    await UI.type('Leg '+t.leg+'/'+t.legs+' toward <b>'+dest.name+'</b>. The engine drinks '+burn+' fuel. <span class="small">('+S.miles+' mi)</span>');
+    let ambush = 26 + S.danger*2;
     if(S.veh.flags.tires) ambush/=2;
     const roll = rnd(100);
-    if(roll < ambush){ return Game.combat(false); }
-    if(roll < ambush+18){ return Game.findGarage(); }
-    if(roll < ambush+34){ return Game.roadEvent(); }
-    // quiet stretch
+    if(roll < ambush) return Game.combat(false);
+    if(roll < ambush+16) return Game.roadEvent();
+    if(roll < ambush+26) return Game.findGarage();
     await UI.type(pick([
       'For once, nothing. Just wind and the smell of rot.',
-      'An empty stretch. You let yourself breathe.',
+      'An empty stretch of road. You let yourself breathe.',
       'Abandoned cars line the median like gravestones. None move.',
-      'A billboard, half-burned: SEE YOU AT THE COAST! :)' ]),'dim');
-    if(chance(35)){ const f=3+rnd(5); S.scrap+=f; UI.toast('+'+f+' scrap','amber'); UI.add('You pocket some scrap from a wreck. <span class="small">+'+f+' ⛭</span>','loot'); }
+      'A faded billboard: SEE YOU AT THE COAST! :)' ]),'dim');
+    if(chance(35)){ const f=3+rnd(6); S.scrap+=f; UI.toast('+'+f+' scrap','amber'); UI.add('You strip some scrap from a wreck. <span class="small">+'+f+' ⛭</span>','loot'); }
     UI.hud();
-    UI.tapToContinue(()=>Game.road());
+    UI.tapToContinue(()=>Game.resume());
   },
 
-  async storyBeat(){
-    const beat = STORY[S.nextStory]; S.nextStory++;
+  async arrive(id){
+    S.loc = id;
+    const r = WORLD.regions[id];
+    if(!S.visited.includes(id)) S.visited.push(id);
+    if(!S.discovered.includes(id)) S.discovered.push(id);
+    r.links.forEach(n=>{ if(!S.discovered.includes(n)) S.discovered.push(n); });
+    save(); UI.hud();
+    if(id==='pier' && !S.endless) return Game.finale();
     UI.clear();
-    if(beat.art) UI.art(beat.art, beat.speaker==='???'?'red':'amber');
-    UI.speaker(beat.speaker, beat.cls);
-    for(const ln of beat.lines){ await UI.type(ln); }
-    save();
-    // milestone also spawns a tougher fight (a "boss" horde) every other beat
-    if(S.nextStory % 2 === 0){
-      UI.add('And the noise of your engine has drawn a crowd...','bad');
-      UI.tapToContinue(()=>Game.combat(true));
+    const art = r.type==='settlement' ? 'camp' : r.type==='wild' ? 'skull' : r.type==='goal' ? 'sun' : 'road';
+    UI.art(art, r.type==='settlement' ? 'amber' : '');
+    UI.speaker('ARRIVED · '+r.name.toUpperCase(),'sys');
+    if(r.firstVisit && !S.seenBeats.includes('fv_'+id)){
+      S.seenBeats.push('fv_'+id);
+      for(const ln of r.firstVisit){ await UI.type(ln); }
+      save();
     } else {
-      UI.tapToContinue(()=>Game.road());
+      await UI.type(pick(['You roll into '+r.name+'.','The '+S.veh.name+' rumbles to a stop in '+r.name+'.','You\'ve reached '+r.name+'.']),'dim');
     }
+    UI.tapToContinue(()=>Game.worldMap());
+  },
+
+  async stranded(){
+    Game._travel = null;
+    UI.clear(); UI.art('carWreck','red'); UI.speaker('STRANDED','enemy');
+    await UI.type('The engine sputters, coughs, and dies. Out of fuel, in the open, miles from anywhere.');
+    if(S.inv.fuelcans>0){
+      S.inv.fuelcans--; S.fuel += 30; UI.hud();
+      await UI.type('You crack your last fuel can into the tank. It\'ll have to be enough.');
+      UI.tapToContinue(()=>Game.worldMap('You limp back to safe ground to regroup.'));
+    } else {
+      await UI.type('You search the nearest wrecks on foot, sucking fumes from cold fuel lines...');
+      if(chance(72)){ const f=8+rnd(14); S.fuel += f; UI.hud(); UI.toast('+'+f+' fuel','blue');
+        await UI.type('A few precious litres. Enough to crawl on. <span class="small">+'+f+' fuel</span>','loot');
+        UI.tapToContinue(()=>Game.worldMap('You nurse the car back to the last waypoint.')); }
+      else { await UI.type('Bone dry. Every tank. And the dead have all the time in the world — they come out of the grey, and they do not stop.','bad');
+        UI.tapToContinue(()=>Game.death()); }
+    }
+  },
+
+  async searchFuel(){
+    UI.clear(); UI.speaker('SEARCHING FOR FUEL','sys');
+    await UI.type('You crack fuel caps across a graveyard of cars, siphoning dregs and fumes.');
+    if(chance(70)){ const f=10+rnd(20); S.fuel=Math.min(S.veh.fuelMax,S.fuel+f); UI.hud(); UI.toast('+'+f+' fuel','blue');
+      await UI.type('Enough to keep moving. <span class="small">+'+f+' fuel</span>','loot'); }
+    else await UI.type('Bone dry. Whoever came before you was thorough.','dim');
+    if(chance(40)){ await UI.type('The noise draws them in.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
+    UI.tapToContinue(()=>Game.resume());
+  },
+
+  /* ---- faction market (settlement shop) ---- */
+  market(){
+    const r = WORLD.regions[S.loc];
+    UI.clear(); UI.art('camp','amber');
+    UI.speaker(FACTIONS[r.faction].toUpperCase()+' MARKET','sys');
+    UI.add('Scrap on hand: <b>'+S.scrap+' ⛭</b>','dim');
+    function item(name, desc, cost, fn, disabled){
+      return { key:'⛭', cls:'pickup', cost:cost+' ⛭', disabled:disabled || S.scrap<cost,
+        label:'<b>'+name+'</b><br><span class="small">'+desc+'</span>',
+        fn:()=>{ S.scrap-=cost; fn(); UI.toast('Bought '+name,'amber'); save(); Game.market(); } };
+    }
+    const opts=[];
+    opts.push(item('Medkit ✚','heal ~40% mid-fight',18,()=>{ S.inv.medkits++; }));
+    opts.push(item('Fuel can ⛽','+30 fuel, stored for later',14,()=>{ S.inv.fuelcans++; }));
+    const topup = Math.max(1, Math.ceil((S.veh.fuelMax-S.fuel)/3));
+    opts.push(item('Top up the tank','fill fuel to max now',topup,()=>{ S.fuel=S.veh.fuelMax; }, S.fuel>=S.veh.fuelMax));
+    const rc = Math.ceil((S.veh.maxInteg-S.veh.integ)/4);
+    opts.push(item('Field repair','restore vehicle integrity to max',rc||1,()=>{ S.veh.integ=S.veh.maxInteg; }, S.veh.integ>=S.veh.maxInteg));
+    if(r.faction==='reaper') opts.push(item('Reaper blade','+4 survivor attack (permanent)',40,()=>{ S.surv.atk+=4; }));
+    if(r.faction==='haven')  opts.push(item('Hot meal &amp; a cot','heal fully now, +4 max HP',20,()=>{ S.surv.maxHp+=4; S.surv.hp=S.surv.maxHp; }));
+    if(r.faction==='convoy') opts.push(item('Convoy fuel cache','+2 fuel cans',22,()=>{ S.inv.fuelcans+=2; }));
+    opts.push({ key:'▸', label:'Leave the market', fn:()=>Game.worldMap() });
+    UI.setChoices(opts);
+  },
+
+  /* ---- Remnant intel (story spine beat) ---- */
+  async intel(){
+    UI.clear(); UI.art('skull','blue');
+    UI.speaker('THE REMNANT','sys');
+    await UI.type('The scientist spreads cracked tablets across a steel table. "The infection isn\'t dying. It\'s learning. New strains every week — faster, smarter, worse."');
+    await UI.type('"But there IS a boat. The Pier, past the coastal ruins. The dead know it\'s the last way out, though — they\'re massing there." She slides you a data-slate. "Take this. And take care, driver."');
+    S.objective = 'Reach The Pier and escape by sea — but the dead are massing there.';
+    if(!S.seenBeats.includes('lab_intel')){
+      S.seenBeats.push('lab_intel');
+      S.surv.xp += 20; S.scrap += 15; UI.toast('+20 XP · +15 scrap','amber');
+      UI.add('<span class="small">Objective updated.</span>','warn');
+    }
+    save();
+    UI.tapToContinue(()=>{ if(S.surv.xp>=S.surv.xpNext) Game.levelUp(); else Game.worldMap(); });
+  },
+
+  /* ---- the finale at the Pier ---- */
+  async finale(){
+    UI.clear(); UI.art('horde','red');
+    UI.speaker('THE PIER','enemy');
+    await UI.type('The road ends at a shattered pier. And there it is — a fishing boat, engine idling, a lantern swinging over the water. Salvation, fifty yards out.');
+    await UI.type('Between you and it: the dead. Thousands, packed shoulder to rotten shoulder, every grey head turning toward the roar of your engine.');
+    await UI.type('No more roads. No more choices. Just the pedal, the horde, and the sea.');
+    S._pierBoss = true;
+    UI.tapToContinue(()=>Game.combat(true));
+  },
+
+  win(){
+    S.endless = true; S.over = false; save();
+    UI.clear(); UI.art('sun','amber');
+    UI.speaker('THE RED DAWN','sys');
+    UI.add('You smash through the last of them and the '+S.veh.name+' skids onto the pier in a spray of bone and salt.','good');
+    UI.add('Hands haul you aboard. The boat pulls away. The dead pour off the pier\'s edge into the black water behind you, and the engine carries you out toward a red, impossible dawn.','');
+    UI.rule();
+    UI.add('You made it. <b>'+S.surv.name+'</b> · '+S.miles+' miles survived · Level '+S.surv.level+'.','warn');
+    UI.add('But you remember what the Remnant told you. The coast was never the end. The dead are still learning. And every boat has to make landfall again, somewhere.','dim');
+    UI.setChoices([
+      { key:'∞', cls:'pickup', label:'<b>SURVIVAL MODE</b> <span class="small">— keep going, endlessly. The threat never stops rising.</span>',
+        fn:()=>{ S.endless=true; UI.toast('ENDLESS UNLOCKED','amber'); Game.worldMap('The road goes on. It always does.'); } },
+      { key:'✕', label:'Rest here a while (back to title)', fn:()=>Game.title() },
+    ]);
   },
 
   async roadEvent(){
@@ -703,10 +902,10 @@ const Game = {
           UI.clear();
           if(chance(60)){ const sc=8+rnd(10); S.scrap+=sc; if(chance(40))S.inv.medkits++;
             await UI.type('They\'re real. Grateful. They press supplies into your hands before melting back into the ruins.');
-            UI.toast('+'+sc+' scrap','amber'); UI.tapToContinue(()=>Game.road()); }
+            UI.toast('+'+sc+' scrap','amber'); UI.tapToContinue(()=>Game.resume()); }
           else { await UI.type('It lunges the second you brake — never alive at all.'); UI.tapToContinue(()=>Game.combat(false)); }
         }},
-        {label:'Floor it past them', key:2, cls:'danger', fn:()=>{ UI.toast('You drive on.'); Game.road('You don\'t look in the mirror.'); }},
+        {label:'Floor it past them', key:2, cls:'danger', fn:()=>{ UI.toast('You drive on.'); Game.resume('You don\'t look in the mirror.'); }},
       ]);
     } else if(ev==='wreck'){
       UI.speaker('ROADSIDE','sys');
@@ -716,16 +915,16 @@ const Game = {
           UI.clear(); const f=15+rnd(20); S.fuel=Math.min(S.veh.fuelMax,S.fuel+f);
           await UI.type('Diesel gurgles into your tank. <span class="small">+'+f+' fuel</span>'); UI.hud();
           if(chance(35)){ await UI.type('The smell brings company.'); UI.tapToContinue(()=>Game.combat(false)); }
-          else UI.tapToContinue(()=>Game.road());
+          else UI.tapToContinue(()=>Game.resume());
         }},
-        {label:'Too risky — drive around', key:2, fn:()=>Game.road()},
+        {label:'Too risky — drive around', key:2, fn:()=>Game.resume()},
       ]);
     } else if(ev==='dog'){
       UI.speaker('???','');
       await UI.type('A dog trots alongside the car for a mile, tongue out, tail going. Then it veers off into a field, alive and unbothered.');
       await UI.type('Stupid, but it makes you smile. First time in weeks.');
       if(chance(50)){ S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+6); UI.toast('+6 HP (morale)','red'); }
-      UI.tapToContinue(()=>Game.road());
+      UI.tapToContinue(()=>Game.resume());
     } else {
       UI.speaker('BLOCKADE','sys');
       await UI.type('Cars dragged across the road. A trap, or a barricade someone died defending. Boxes of supplies still sit behind it.');
@@ -734,12 +933,12 @@ const Game = {
           UI.clear(); const dmg=3+rnd(6); S.veh.integ=Math.max(1,S.veh.integ-Math.max(0,dmg-S.veh.armor));
           const sc=10+rnd(12); S.scrap+=sc;
           await UI.type('Metal screams. You burst through. <span class="small">−'+dmg+' integrity, +'+sc+' scrap</span>'); UI.hud();
-          UI.tapToContinue(()=>Game.road());
+          UI.tapToContinue(()=>Game.resume());
         }},
         {label:'Pick through it carefully on foot', key:2, fn:async()=>{
           UI.clear();
           if(chance(55)){ const sc=12+rnd(14); S.scrap+=sc; if(chance(30))S.inv.fuelcans++;
-            await UI.type('Quiet hands, quick work. You strip it clean. <span class="small">+'+sc+' scrap</span>'); UI.toast('+'+sc+' scrap','amber'); UI.tapToContinue(()=>Game.road()); }
+            await UI.type('Quiet hands, quick work. You strip it clean. <span class="small">+'+sc+' scrap</span>'); UI.toast('+'+sc+' scrap','amber'); UI.tapToContinue(()=>Game.resume()); }
           else { await UI.type('A shape rises from between the cars.'); UI.tapToContinue(()=>Game.combat(false)); }
         }},
       ]);
@@ -763,29 +962,33 @@ const Game = {
       else { S.inv.fuelcans++; UI.toast('+1 fuel can','blue'); await UI.type('A full fuel can, capped and waiting. <span class="small">+1 ⛽-can</span>','loot'); }
       UI.hud();
       if(chance(25+S.danger*2)){ await UI.type('The noise of your rummaging carries. Something answers it.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
-      UI.tapToContinue(()=>Game.road());
+      UI.tapToContinue(()=>Game.resume());
     } else {
       await UI.type('Picked clean. Whoever came before you wasn\'t gentle.','dim');
       if(chance(40+S.danger*2)){ await UI.type('And you\'re not alone in the ruins.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
-      UI.tapToContinue(()=>Game.road());
+      UI.tapToContinue(()=>Game.resume());
     }
   },
 
-  /* ---- rest & repair ---- */
+  /* ---- rest & repair (safe in settlements, risky in the wild) ---- */
   async rest(){
+    const safe = WORLD.regions[S.loc] && WORLD.regions[S.loc].type==='settlement';
     UI.clear();
     UI.art('camp','amber');
-    UI.speaker('MAKESHIFT CAMP','sys');
-    await UI.type('You find a defensible spot — a fenced lot, a collapsed overpass — and stop to patch yourself and the car.');
-    const heal = Math.round(S.surv.maxHp*0.35);
-    const fix = Math.round(S.veh.maxInteg*0.30);
+    UI.speaker(safe?'SAFE QUARTERS':'MAKESHIFT CAMP','sys');
+    await UI.type(safe
+      ? 'Behind walls and watch-fires, you finally let your guard down. Real rest, for once.'
+      : 'You find a defensible spot — a fenced lot, a collapsed overpass — and stop to patch yourself and the car.');
+    const rate = safe?0.55:0.35;
+    const heal = Math.round(S.surv.maxHp*rate);
+    const fix = Math.round(S.veh.maxInteg*(safe?0.45:0.30));
     S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+heal);
     S.veh.integ=Math.min(S.veh.maxInteg,S.veh.integ+fix);
     await UI.type('You bind your wounds (+'+heal+' HP) and hammer out the worst of the dents (+'+fix+' integrity).','good');
     UI.hud();
-    if(chance(40+S.danger*3)){ await UI.type('But rest is a luxury, and the dead collect on luxuries.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
-    await UI.type('The night passes, somehow, quiet.','dim');
-    UI.tapToContinue(()=>Game.road());
+    if(!safe && chance(40+S.danger*3)){ await UI.type('But rest in the open is a luxury, and the dead collect on luxuries.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
+    await UI.type(safe?'The night passes behind the walls, quiet and whole.':'The night passes, somehow, quiet.','dim');
+    UI.tapToContinue(()=>Game.resume());
   },
 
   /* ---- garage (found or chosen) ---- */
@@ -816,7 +1019,7 @@ const Game = {
     if(S.veh.integ<S.veh.maxInteg) opts.push({ key:'R', cost:repairCost+' ⛭', disabled:S.scrap<repairCost||repairCost===0,
       label:'<b>Full repair</b><br><span class="small">restore integrity to max</span>',
       fn:()=>{ S.scrap-=repairCost; S.veh.integ=S.veh.maxInteg; UI.toast('Repaired','blue'); save(); Game.garage(found); } });
-    opts.push({ key:'▸', label:'Back to the road', fn:()=>Game.road() });
+    opts.push({ key:'▸', label:'Back to the road', fn:()=>Game.resume() });
     UI.setChoices(opts);
   },
 
@@ -1024,7 +1227,7 @@ const Game = {
       await UI.type('You break contact, fishtail onto open road, and leave them clawing at your dust.','good');
       // small fuel cost
       S.fuel=Math.max(0,S.fuel-3); UI.hud();
-      UI.tapToContinue(()=>Game.road('Heart pounding, you put miles between you and them.'));
+      UI.tapToContinue(()=>Game.resume('Heart pounding, you put miles between you and them.'));
     } else {
       await UI.type('Too slow — they swarm the car before you can build speed. One free swipe each.','bad');
       // enemies get a free hit, then back to combat
@@ -1037,6 +1240,7 @@ const Game = {
 
   async victory(){
     const cb=Game._cb;
+    if(S._pierBoss){ S._pierBoss=false; return Game.win(); }
     UI.clear();
     UI.art('skull','dim');
     UI.speaker('CLEARED','sys');
@@ -1058,7 +1262,7 @@ const Game = {
     UI.hud(); save();
     // level up?
     if(S.surv.xp >= S.surv.xpNext){ return UI.tapToContinue(()=>Game.levelUp()); }
-    UI.tapToContinue(()=>Game.road());
+    UI.tapToContinue(()=>Game.resume());
   },
 
   levelUp(){
@@ -1073,7 +1277,7 @@ const Game = {
       UI.setChoices(offers.map((u,i)=>({
         key:i+1, cls:'pickup',
         label:`<b>${u.name}</b><br><span class="small">${u.desc}</span>`,
-        fn:()=>{ u.apply(S); if(!u.repeatable)S.surv.mods.push(u.id); UI.toast('Learned: '+u.name,'red'); save(); Game.road('Stronger now. The road waits.'); }
+        fn:()=>{ u.apply(S); if(!u.repeatable)S.surv.mods.push(u.id); UI.toast('Learned: '+u.name,'red'); save(); Game.resume('Stronger now. The road waits.'); }
       })).concat(
         S.surv.perk==='lucky' && !Game._rerolled ? [{key:'↻',cls:'danger',label:'Reroll choices <span class="small">(Lucky)</span>',fn:()=>{ Game._rerolled=true; offers=Game.rollOffers(SURV_UPGRADES,S.surv.mods,3); render(); }}] : []
       ));
