@@ -275,6 +275,33 @@ const ART = {
 `      \\ | /
     '- (.) -'     a red dawn
       / | \\`,
+  lurker:
+`    ___
+   (o.o)   ...hsss...
+    |=|    (crouched, waiting)
+   _/ \\_`,
+  screamer:
+`    .-.
+   (O O)    AAAIIIEEE!!
+    )^(    (((   )))
+   /| |\\   it calls the others`,
+  bloater:
+`    .-~~~-.
+   / () ()  \\   *gurgle*
+  ( ( bloat ) )
+   \\  ~~~~~  /  swollen with gas
+    '-._.-'`,
+  stalker:
+`   .  ,  .
+  . (>.<) .    ~flickers~
+   './  \\.'   now you don't`,
+  tyrant:
+`    _______
+   /## # ##\\    T Y R A N T
+  | (X) (X) |
+  |   vvv   |
+ /| [#####] |\\
+==|_|     |_|==`,
 };
 
 /* ----------------------------- CONTENT --------------------------------- */
@@ -331,11 +358,25 @@ const VEH_UPGRADES = [
   { id:'fortress', name:'Rolling Fortress', desc:'+30 max integrity, +5 armor', rare:3, apply:s=>{s.veh.maxInteg+=30;s.veh.integ+=30;s.veh.armor+=5;} },
 ];
 
+// Strains unlock as the Mutation Clock climbs (tier). Each higher strain
+// brings a real combat mechanic, so the stakes escalate the further you go.
 const ZOMBIES = [
-  { id:'walker', name:'Walker', art:'walker', col:'',     base:{hp:16,atk:5,agi:1}, xp:8,  scrap:4 },
-  { id:'runner', name:'Runner', art:'runner', col:'amber',base:{hp:11,atk:7,agi:6}, xp:11, scrap:5 },
-  { id:'brute',  name:'Brute',  art:'brute',  col:'red',  base:{hp:40,atk:11,agi:0},xp:24, scrap:12 },
-  { id:'spitter',name:'Spitter',art:'walker', col:'blue', base:{hp:18,atk:9,agi:3}, xp:16, scrap:8, armorPierce:true },
+  { id:'walker', name:'Walker', art:'walker', col:'',      tier:0, base:{hp:16,atk:5,agi:1},  xp:8,  scrap:4 },
+  { id:'runner', name:'Runner', art:'runner', col:'amber', tier:0, base:{hp:11,atk:7,agi:6},  xp:11, scrap:5 },
+  { id:'spitter',name:'Spitter',art:'bloater',col:'blue',  tier:1, base:{hp:18,atk:9,agi:3},  xp:16, scrap:8,  pierce:true,
+    telegraph:'SPITTER — its bile chews straight through armour. Your vehicle\'s plating won\'t save you from this one.' },
+  { id:'lurker', name:'Lurker', art:'lurker', col:'',      tier:1, base:{hp:14,atk:8,agi:5},  xp:15, scrap:7,  ambush:true,
+    telegraph:'LURKER — it was already waiting. Ambushers get a free strike before the fight even begins.' },
+  { id:'brute',  name:'Brute',  art:'brute',  col:'red',   tier:2, base:{hp:40,atk:11,agi:0}, xp:26, scrap:13,
+    telegraph:'BRUTE — a wall of dead muscle. Slow, but it soaks punishment and hits like a falling truck.' },
+  { id:'screamer',name:'Screamer',art:'screamer',col:'amber',tier:2,base:{hp:13,atk:4,agi:4},xp:22, scrap:11, summon:true,
+    telegraph:'SCREAMER — its shriek drags more dead out of the dark every moment it lives. Kill it FIRST.' },
+  { id:'stalker',name:'Stalker',art:'stalker', col:'blue', tier:3, base:{hp:16,atk:10,agi:8}, xp:24, scrap:12, evasion:40,
+    telegraph:'STALKER — it flickers at the edge of sight. Hard to land a blade on; ram it, or get lucky.' },
+  { id:'bloater',name:'Bloater',art:'bloater', col:'red',  tier:3, base:{hp:30,atk:6,agi:0},  xp:28, scrap:15, explode:14,
+    telegraph:'BLOATER — swollen with gas and rot. When it dies it ERUPTS. Don\'t be standing in melee range.' },
+  { id:'tyrant', name:'Tyrant', art:'tyrant',  col:'red',  tier:5, base:{hp:70,atk:16,agi:1}, xp:60, scrap:35, explode:10, elite:true,
+    telegraph:'TYRANT — an apex mutation. Everything the dead have learned, stacked into one towering body.' },
 ];
 
 /* ---- THE OPEN WORLD: a map of regions you choose to drive between ---- */
@@ -434,6 +475,8 @@ function freshState(arch, veh){
     loc:WORLD.start, visited:[WORLD.start], discovered:[WORLD.start].concat(WORLD.regions[WORLD.start].links),
     seenBeats:[], endless:false,
     objective:'Reach the coast. There are rumours of a boat.',
+    // zombie evolution
+    seenStrains:[], tactics:{melee:0, ram:0},
     surv:{
       name:a.name, perk:a.perk,
       maxHp:a.stats.maxHp, hp:a.stats.maxHp,
@@ -699,7 +742,7 @@ const Game = {
     const r = WORLD.regions[S.loc];
     UI.artText(renderMap());
     UI.speaker(r.name.toUpperCase(),'sys');
-    UI.add('<span class="small">control: <b>'+FACTIONS[r.faction]+'</b> &nbsp;·&nbsp; threat <span style="color:var(--red)">'+threatDots(r.danger)+'</span></span>');
+    UI.add('<span class="small">control: <b>'+FACTIONS[r.faction]+'</b> &nbsp;·&nbsp; threat <span style="color:var(--red)">'+threatDots(r.danger)+'</span> &nbsp;·&nbsp; mutation tier <b>'+Game.mutTier()+'</b></span>');
     UI.add(r.desc,'dim');
     if(msg) UI.add(msg);
     if(S.fuel < 6) UI.add('⛽ Fuel critical — not enough to take the road.','warn');
@@ -1062,22 +1105,44 @@ const Game = {
   },
 
   /* ===================== COMBAT ===================== */
+  // The Mutation Clock: rises with distance (and hard in endless mode).
+  mutTier(){ return Math.min(8, Math.floor(S.miles/8) + (S.endless?3:0)); },
+
+  mkFoe(tpl, scale, bonusHp){
+    const hp = Math.round(tpl.base.hp*scale) + (bonusHp||0) + (tpl.elite?40:0);
+    return { tpl, name:tpl.name, hp, maxHp:hp,
+      atk:Math.round(tpl.base.atk*scale), agi:tpl.base.agi,
+      pierce:!!tpl.pierce, ambush:!!tpl.ambush, summon:!!tpl.summon,
+      evasion:tpl.evasion||0, explode:tpl.explode||0, elite:!!tpl.elite, exploded:false };
+  },
+
   combat(boss){
-    // build a horde
-    const n = boss ? 3+rnd(3) : 1+rnd(Math.min(3,1+Math.floor(S.danger/2)));
-    const foes=[];
+    const mt = Game.mutTier();
+    const scale = 1 + S.danger*0.16 + mt*0.05;
+    const pool = ZOMBIES.filter(z=>!z.elite && z.tier<=mt);
+    const n = boss ? 3+rnd(3)+Math.floor(mt/3) : 1+rnd(Math.min(4,1+Math.floor(S.danger/2)));
+    // adaptation: the dead lean toward whatever counters your habits
+    const ramHeavy   = S.tactics.ram   > S.tactics.melee + 3;
+    const meleeHeavy = S.tactics.melee > S.tactics.ram   + 3;
+    const foes=[]; const bounty={xp:0,scrap:0};
     for(let i=0;i<n;i++){
-      let tpl = boss && i===0 ? ZOMBIES.find(z=>z.id==='brute') : pick(ZOMBIES);
-      const scale = 1 + S.danger*0.18;
-      foes.push({
-        tpl, name:tpl.name,
-        hp:Math.round(tpl.base.hp*scale)+(boss?20:0),
-        maxHp:Math.round(tpl.base.hp*scale)+(boss?20:0),
-        atk:Math.round(tpl.base.atk*scale), agi:tpl.base.agi,
-        pierce:tpl.armorPierce,
-      });
+      let tpl;
+      if(boss && i===0){
+        tpl = (mt>=5 && chance(60)) ? ZOMBIES.find(z=>z.id==='tyrant') : ZOMBIES.find(z=>z.id==='brute');
+      } else {
+        const bag=[];
+        pool.forEach(z=>{
+          let w = Math.max(1, 4 - z.tier);
+          if(ramHeavy   && (z.id==='brute'||z.id==='bloater')) w+=3;  // punish ram-spam
+          if(meleeHeavy && (z.id==='runner'||z.id==='stalker')) w+=3; // punish melee-spam
+          for(let k=0;k<w;k++) bag.push(z);
+        });
+        tpl = bag.length ? pick(bag) : ZOMBIES[0];
+      }
+      foes.push(Game.mkFoe(tpl, scale, boss?20:0));
+      bounty.xp += tpl.xp; bounty.scrap += tpl.scrap;
     }
-    Game._cb = { foes, boss, turn:1 };
+    Game._cb = { foes, boss, turn:1, summonsLeft:3+mt, bounty, mt, scale };
     Game.combatIntro();
   },
 
@@ -1089,6 +1154,29 @@ const Game = {
     await UI.type(cb.boss
       ? 'They come from everywhere at once — '+cb.foes.length+' of them, and one big enough to block out the sky.'
       : (cb.foes.length>1?cb.foes.length+' of them peel off a wreck and come for you.':'A '+cb.foes[0].name+' fixes on you and charges.'));
+
+    // Telegraph any strain you've never seen before — escalating dread.
+    const fresh=[];
+    for(const f of cb.foes){ if(f.tpl.telegraph && !S.seenStrains.includes(f.tpl.id)){ S.seenStrains.push(f.tpl.id); fresh.push(f.tpl); } }
+    if(fresh.length){
+      save();
+      for(const t of fresh){ UI.speaker('⚠ NEW STRAIN','enemy'); await UI.type(t.telegraph,'warn'); }
+    }
+
+    // Lurkers ambush before the first turn.
+    const lurkers=cb.foes.filter(f=>f.ambush);
+    if(lurkers.length){
+      UI.speaker('AMBUSH!','enemy');
+      for(const f of lurkers){
+        if(S.surv.dodge && chance(S.surv.dodge)){ await UI.type('A '+f.name+' bursts from cover — but you slip aside.','dim'); continue; }
+        const def = S.surv.def + (S.surv.perk==='tough'?1:0);
+        const taken = Math.max(1, f.atk+rnd(3)-def);
+        S.surv.hp = Math.max(0, S.surv.hp-taken);
+        await UI.type('A '+f.name+' lunges from hiding — <b>'+taken+'</b> damage before you can raise your guard!','bad');
+      }
+      UI.hud();
+      if(S.surv.hp<=0) return UI.tapToContinue(()=>Game.death());
+    }
     Game.combatTurn();
   },
 
@@ -1098,9 +1186,15 @@ const Game = {
     if(cb.foes.length===0) return Game.victory();
     UI.clear();
     // enemy roster
-    UI.speaker('THREATS','enemy');
+    UI.speaker('THREATS · mutation tier '+cb.mt,'enemy');
     cb.foes.forEach((f,i)=>{
-      UI.add(`<span class="small">[${i+1}]</span> <b>${f.name}</b> &nbsp;HP ${f.hp}/${f.maxHp} &nbsp;<span class="small">atk ${f.atk}${f.pierce?' · pierces armor':''}</span>`, 'bad');
+      const tags=[];
+      if(f.pierce)tags.push('pierces armour');
+      if(f.summon)tags.push('summons');
+      if(f.evasion)tags.push('evasive');
+      if(f.explode)tags.push('explodes');
+      if(f.elite)tags.push('ELITE');
+      UI.add(`<span class="small">[${i+1}]</span> <b>${f.name}</b> &nbsp;HP ${f.hp}/${f.maxHp} &nbsp;<span class="small">atk ${f.atk}${tags.length?' · '+tags.join(', '):''}</span>`, 'bad');
     });
     UI.rule();
     UI.add(`<span class="small">YOU ${S.surv.hp}/${S.surv.maxHp} HP ✚ &nbsp;|&nbsp; ${S.veh.name} ${S.veh.integ}/${S.veh.maxInteg} ⚙</span>`);
@@ -1138,50 +1232,72 @@ const Game = {
 
   async playerMelee(ti){
     const cb=Game._cb; const f=cb.foes[ti]; if(!f) return Game.combatTurn();
-    const {dmg,crit}=Game.rollSurvDamage();
+    S.tactics.melee++;
     UI.clear();
     UI.speaker('YOU','');
-    let killed=false;
+    // Stalkers and other evasive strains can slip your blade.
+    if(f.evasion && chance(f.evasion)){
+      await UI.type('You swing hard — but the '+f.name+' simply isn\'t where it was. Nothing but air.','dim');
+      return Game.afterPlayerAction();
+    }
+    const {dmg,crit}=Game.rollSurvDamage();
     if(S.surv.flags.execute && f.hp <= f.maxHp*0.18){
-      f.hp=0; killed=true;
+      f.hp=0;
       await UI.type('You drive your blade through its skull — <b>execution</b>. It drops instantly.','good');
     } else {
-      f.hp-=dmg; if(f.hp<=0)killed=true;
+      f.hp-=dmg;
       await UI.type((crit?'<b>CRITICAL!</b> ':'')+'You smash the '+f.name+' for <b>'+dmg+'</b>.'+(crit?' Bone gives.':''),'good');
       if(S.surv.flags.lifesteal){ const h=Math.round(dmg*0.2); S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); if(h>0)UI.toast('+'+h+' HP','red'); }
     }
-    if(killed){ await UI.type('The '+f.name+' crumples.','dim'); cb.foes.splice(ti,1); }
     Game.afterPlayerAction();
   },
 
   async playerRam(){
     const cb=Game._cb;
+    S.tactics.ram++;
     let dmg = S.veh.ram + rnd(6) + (S.veh.flags.plow?S.veh.speed:0);
     UI.clear();
     UI.speaker(S.veh.name,'');
-    // ram nearest; recoil damage to vehicle
     const f=cb.foes[0];
     f.hp-=dmg;
     await UI.type('You gun it and slam the '+f.name+' for <b>'+dmg+'</b>. Wet crunch of impact.','good');
-    if(S.veh.flags.flamer){ cb.foes.forEach(z=>{ if(z!==f){ const b=4+rnd(5); z.hp-=b; } }); await UI.type('Flame jets wash over the rest of the pack.','warn'); }
-    if(S.veh.flags.nitro && chance(25)){ const f2=cb.foes[0]; if(f2){ const d2=Math.round(dmg*0.6); f2.hp-=d2; await UI.type('NITRO kicks — a second impact for '+d2+'!','warn'); } }
-    // recoil
+    if(S.veh.flags.flamer){ cb.foes.forEach(z=>{ if(z!==f){ z.hp-=4+rnd(5); } }); await UI.type('Flame jets wash over the rest of the pack.','warn'); }
+    if(S.veh.flags.nitro && chance(25)){ const d2=Math.round(dmg*0.6); f.hp-=d2; await UI.type('NITRO kicks — a second impact for '+d2+'!','warn'); }
     const recoil=Math.max(0, 2+rnd(4) - Math.floor(S.veh.armor/2));
     if(recoil>0){ S.veh.integ=Math.max(0,S.veh.integ-recoil); await UI.type('The hit rattles your ride. <span class="small">−'+recoil+' integrity</span>','dim'); }
-    // clear dead
-    Game._cb.foes = cb.foes.filter(z=>z.hp>0);
-    if(cb.foes.length>Game._cb.foes.length) UI.add('Bodies tumble under the wheels.','dim');
     Game.afterPlayerAction();
   },
 
-  afterPlayerAction(){
+  async afterPlayerAction(){
     const cb=Game._cb;
-    // passive turret
-    if(S.veh.turret>0 && cb.foes.length){ const t=cb.foes[0]; t.hp-=S.veh.turret; UI.add('Roof turret stitches the '+t.name+' for '+S.veh.turret+'.','dim'); }
-    Game._cb.foes = cb.foes.filter(z=>z.hp>0);
+    // passive roof turret picks a living target
+    if(S.veh.turret>0){ const t=cb.foes.find(z=>z.hp>0); if(t){ t.hp-=S.veh.turret; UI.add('Roof turret stitches the '+t.name+' for '+S.veh.turret+'.','dim'); } }
+    await Game.resolveDeaths();
     UI.hud();
-    if(Game._cb.foes.length===0) return UI.tapToContinue(()=>Game.victory());
+    if(S.surv.hp<=0 || S.veh.integ<=0) return UI.tapToContinue(()=>Game.death());
+    if(cb.foes.length===0) return UI.tapToContinue(()=>Game.victory());
     UI.tapToContinue(()=>Game.enemyPhase());
+  },
+
+  // Remove the dead — but Bloaters erupt on the way out.
+  async resolveDeaths(){
+    const cb=Game._cb;
+    for(const f of cb.foes){
+      if(f.hp<=0 && f.explode && !f.exploded){
+        f.exploded=true;
+        const blast=f.explode+rnd(6);
+        const sd=Math.max(1, blast-Math.floor(S.surv.def/2));
+        const vd=Math.max(0, blast-S.veh.armor);
+        S.surv.hp=Math.max(0,S.surv.hp-sd);
+        S.veh.integ=Math.max(0,S.veh.integ-vd);
+        cb.foes.forEach(z=>{ if(z!==f && z.hp>0) z.hp-=Math.round(blast/2); });
+        UI.speaker('⚠ ERUPTION','enemy');
+        await UI.type('The '+f.name+' bursts in a gout of acid and bone — <b>'+sd+'</b> to you, <b>'+vd+'</b> to the '+S.veh.name+', and it splashes the pack around it.','bad');
+      }
+    }
+    const dead=cb.foes.filter(z=>z.hp<=0);
+    if(dead.length) UI.add(dead.map(z=>z.name).join(', ')+(dead.length>1?' go down.':' goes down.'),'dim');
+    cb.foes = cb.foes.filter(z=>z.hp>0);
   },
 
   async enemyPhase(pre){
@@ -1191,6 +1307,19 @@ const Game = {
     if(pre) UI.add(pre,'dim');
     // survivor regen
     if(S.surv.regen>0 && S.surv.hp<S.surv.maxHp){ S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+S.surv.regen); }
+    // screamers drag more dead into the fight
+    const screamers=cb.foes.filter(f=>f.summon);
+    if(screamers.length && cb.summonsLeft>0 && cb.foes.length<8){
+      const w=ZOMBIES.find(z=>z.id==='walker');
+      let summoned=0;
+      for(const s of screamers){
+        if(cb.summonsLeft<=0 || cb.foes.length>=8) break;
+        cb.summonsLeft--; summoned++;
+        const nf=Game.mkFoe(w, cb.scale, 0);
+        cb.foes.push(nf); cb.bounty.xp+=w.xp; cb.bounty.scrap+=w.scrap;
+      }
+      if(summoned) await UI.type('A Screamer\'s shriek splits the air — '+summoned+' more dead claw out of the dark to answer it!','bad');
+    }
     for(const f of cb.foes){
       if(S.surv.hp<=0||S.veh.integ<=0) break;
       // dodge?
@@ -1244,12 +1373,10 @@ const Game = {
     UI.clear();
     UI.art('skull','dim');
     UI.speaker('CLEARED','sys');
-    // rewards
-    let xp=0, scrap=0;
-    // recompute from a fresh roster snapshot count (use boss flag + danger)
-    const killed = Game._lastKilled || (cb.boss?5:2);
-    xp = (cb.boss?40:0) + 8 + S.danger*4 + rnd(8);
-    scrap = (cb.boss?20:0) + 5 + S.danger*2 + rnd(6) + S.surv.scav*2;
+    // rewards scale with the bounty of everything that turned up (summons included)
+    const bounty = cb.bounty || {xp:8,scrap:5};
+    const xp = Math.round(bounty.xp * (1 + S.danger*0.05)) + rnd(6);
+    const scrap = Math.round(bounty.scrap * (1 + S.danger*0.04)) + S.surv.scav*2 + rnd(4);
     S.surv.xp += xp; S.scrap += scrap;
     await UI.type('The last of them stops twitching. You\'re still breathing. <span class="small">+'+xp+' XP · +'+scrap+' scrap</span>','good');
     // second wind
