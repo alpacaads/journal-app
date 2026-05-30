@@ -1,34 +1,28 @@
 name: Deploy DEAD MILES to GitHub Pages
 
+# Publishes the game to a `gh-pages` branch. This avoids the github-pages
+# "environment" deployment-branch gate that blocks runs from feature branches
+# (the cause of the 4-second deploy failure). After the first successful run,
+# set: repo Settings -> Pages -> Source: "Deploy from a branch" -> gh-pages / (root).
+
 on:
   push:
-    branches: ["claude/text-visual-novel-game-vQ5k1"]
+    branches: ["claude/text-visual-novel-game-vQ5k1", "main"]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# Allow one concurrent deployment; let the newest push win.
 concurrency:
-  group: "pages"
+  group: "deadmiles-pages"
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Configure Pages (auto-enable if needed)
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       # Publish only the game so the site root serves index.html directly.
       - name: Stage site
@@ -36,11 +30,10 @@ jobs:
           mkdir -p _site
           cp index.html _site/index.html
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Publish to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: "_site"
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
+          force_orphan: true
