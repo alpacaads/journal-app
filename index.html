@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e0a">
+<meta name="description" content="DEAD MILES — a text-based zombie survival visual novel. Upgrade your survivor and your ride, endlessly.">
+<title>DEAD MILES // survival on the road</title>
+<style>
+  :root{
+    --bg:#0a0e0a;
+    --bg2:#0f150f;
+    --ink:#9be88a;
+    --ink-dim:#4f7a47;
+    --amber:#e8b14a;
+    --red:#e0563f;
+    --blue:#5fb4d6;
+    --pink:#d678a8;
+    --line:#1e2a1c;
+    --glow:0 0 6px rgba(155,232,138,.35);
+    --mono:'Courier New',ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);}
+  body{
+    font-family:var(--mono);
+    color:var(--ink);
+    font-size:16px;
+    line-height:1.5;
+    overflow:hidden;
+    -webkit-font-smoothing:none;
+    user-select:none;
+  }
+  /* subtle scanline / crt vibe */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+    background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.18) 3px,rgba(0,0,0,0) 4px);
+    mix-blend-mode:multiply;opacity:.5;
+  }
+  #app{
+    display:flex;flex-direction:column;
+    height:100dvh;max-width:760px;margin:0 auto;
+    background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);
+    position:relative;
+  }
+
+  /* ---------- HUD ---------- */
+  #hud{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 10px;border-bottom:1px solid var(--line);
+    background:rgba(0,0,0,.25);font-size:12px;flex:0 0 auto;
+  }
+  #hud .title{color:var(--ink-dim);letter-spacing:2px;font-weight:bold;}
+  #hud .spacer{flex:1;}
+  .chip{color:var(--ink-dim);white-space:nowrap;}
+  .chip b{color:var(--ink);}
+  .chip.scrap b{color:var(--amber);}
+  .chip.fuel b{color:var(--blue);}
+  #statsBtn{
+    background:none;border:1px solid var(--line);color:var(--ink-dim);
+    font-family:var(--mono);font-size:12px;padding:4px 9px;border-radius:4px;cursor:pointer;
+  }
+  #statsBtn:active{background:var(--line);}
+
+  /* ---------- main scene ---------- */
+  #scene{
+    flex:1 1 auto;overflow-y:auto;padding:14px 16px 6px;
+    -webkit-overflow-scrolling:touch;scroll-behavior:smooth;
+  }
+  #scene::-webkit-scrollbar{width:0;}
+  .art{
+    white-space:pre;font-size:11px;line-height:1.15;color:var(--ink-dim);
+    text-shadow:var(--glow);margin:0 0 10px;overflow-x:auto;
+    display:block;
+  }
+  .art.amber{color:var(--amber);}
+  .art.red{color:var(--red);}
+  .art.blue{color:var(--blue);}
+  .speaker{color:var(--amber);font-weight:bold;letter-spacing:1px;font-size:13px;margin:10px 0 2px;}
+  .speaker.sys{color:var(--ink-dim);}
+  .speaker.enemy{color:var(--red);}
+  .narr{margin:0 0 4px;text-shadow:var(--glow);}
+  .narr.dim{color:var(--ink-dim);}
+  .narr.warn{color:var(--amber);}
+  .narr.bad{color:var(--red);}
+  .narr.good{color:var(--ink);}
+  .narr.loot{color:var(--blue);}
+  .rule{color:var(--line);margin:8px 0;user-select:none;}
+  .cursor::after{content:"\2588";animation:blink 1s steps(1) infinite;color:var(--ink);}
+  @keyframes blink{50%{opacity:0;}}
+
+  /* ---------- choices ---------- */
+  #choices{
+    flex:0 0 auto;padding:8px 12px calc(12px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);background:rgba(0,0,0,.3);
+    display:flex;flex-direction:column;gap:7px;max-height:46vh;overflow-y:auto;
+  }
+  .choice{
+    display:block;width:100%;text-align:left;cursor:pointer;
+    font-family:var(--mono);font-size:15px;color:var(--ink);
+    background:rgba(155,232,138,.04);border:1px solid var(--line);
+    border-radius:6px;padding:12px 13px;line-height:1.35;
+    transition:background .08s,border-color .08s,transform .05s;
+  }
+  .choice:active{background:rgba(155,232,138,.14);transform:scale(.99);}
+  .choice .key{color:var(--ink-dim);margin-right:8px;}
+  .choice .cost{float:right;color:var(--amber);font-size:13px;}
+  .choice.disabled{opacity:.4;border-style:dashed;}
+  .choice.danger{border-color:#42201c;}
+  .choice.danger .key{color:var(--red);}
+  .choice.pickup{border-color:#1c2e3a;}
+  .choice.tap{
+    text-align:center;color:var(--ink-dim);border-style:dashed;
+    animation:pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{50%{opacity:.55;}}
+
+  /* ---------- stats drawer ---------- */
+  #overlay{
+    position:absolute;inset:0;z-index:40;background:rgba(0,0,0,.55);
+    display:none;align-items:flex-end;
+  }
+  #overlay.open{display:flex;}
+  #drawer{
+    width:100%;max-height:88%;overflow-y:auto;
+    background:var(--bg2);border-top:2px solid var(--ink-dim);
+    border-radius:14px 14px 0 0;padding:14px 16px calc(20px + env(safe-area-inset-bottom));
+    animation:slideup .18s ease;
+  }
+  @keyframes slideup{from{transform:translateY(40px);opacity:.4;}to{transform:none;opacity:1;}}
+  #drawer h2{font-size:13px;letter-spacing:2px;color:var(--amber);margin:0 0 10px;display:flex;}
+  #drawer h2 .x{margin-left:auto;color:var(--ink-dim);cursor:pointer;padding:0 6px;}
+  .panel{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;}
+  .panel .pt{color:var(--ink-dim);font-size:11px;letter-spacing:2px;margin-bottom:8px;}
+  .panel .pt b{color:var(--ink);}
+  .stat{display:flex;align-items:center;font-size:13px;margin:3px 0;gap:8px;}
+  .stat .nm{flex:0 0 96px;color:var(--ink-dim);}
+  .stat .vl{color:var(--ink);min-width:42px;}
+  .bar{flex:1;height:9px;background:#000;border:1px solid var(--line);border-radius:3px;overflow:hidden;}
+  .bar > i{display:block;height:100%;background:var(--ink);}
+  .bar.hp > i{background:var(--red);}
+  .bar.veh > i{background:var(--blue);}
+  .bar.xp > i{background:var(--amber);}
+  .modlist{font-size:12px;color:var(--ink-dim);line-height:1.6;}
+  .modlist b{color:var(--ink);}
+  .modlist .tag{color:var(--blue);}
+
+  /* ---------- toasts ---------- */
+  #toast{
+    position:absolute;left:50%;bottom:calc(48vh + 10px);transform:translateX(-50%);
+    z-index:60;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:90%;
+  }
+  .toast{
+    background:rgba(0,0,0,.85);border:1px solid var(--ink-dim);border-radius:6px;
+    padding:6px 12px;font-size:13px;color:var(--ink);text-align:center;
+    animation:tin .25s ease, tout .4s ease 1.6s forwards;max-width:100%;
+  }
+  .toast.amber{border-color:var(--amber);color:var(--amber);}
+  .toast.red{border-color:var(--red);color:var(--red);}
+  .toast.blue{border-color:var(--blue);color:var(--blue);}
+  @keyframes tin{from{transform:translateY(8px);opacity:0;}}
+  @keyframes tout{to{opacity:0;transform:translateY(-8px);}}
+
+  .small{font-size:12px;color:var(--ink-dim);}
+  .center{text-align:center;}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <span class="title">DEAD&nbsp;MILES</span>
+    <span class="spacer"></span>
+    <span class="chip mi">MI <b id="hudMiles">0</b></span>
+    <span class="chip scrap">⛭ <b id="hudScrap">0</b></span>
+    <span class="chip fuel">⛽ <b id="hudFuel">0</b></span>
+    <button id="statsBtn" onclick="UI.openDrawer()">STATUS</button>
+  </div>
+
+  <div id="scene" onclick="UI.sceneTap()"></div>
+
+  <div id="choices"></div>
+
+  <div id="toast"></div>
+
+  <div id="overlay" onclick="if(event.target.id==='overlay')UI.closeDrawer()">
+    <div id="drawer"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   DEAD MILES — a text-based zombie survival visual novel
+   Single-file. Two progression cores: the SURVIVOR and the VEHICLE.
+   Both start as junk and upgrade endlessly (roguelike + procedural).
+   ========================================================================= */
+
+/* ----------------------------- ASCII ART ------------------------------- */
+const ART = {
+  logo:
+`  ____  _____ ____  ____    __  __ ___ _     _____ ____
+ |  _ \\| ____|  _ \\|  _ \\  |  \\/  |_ _| |   | ____/ ___|
+ | | | |  _| | |_) | | | | | |\\/| || || |   |  _| \\___ \\
+ | |_| | |___|  _ <| |_| | | |  | || || |___| |___ ___) |
+ |____/|_____|_| \\_\\____/  |_|  |_|___|_____|_____|____/`,
+  road:
+`        \\        |        /
+   . ' .  \\   .  |  .   /  . ' .
+  ___________________________________
+ /                                   \\
+/__________________  ________________ \\
+       |||      ||| || |||      |||
+=======================================`,
+  car:
+`        ______________
+   ____/   |  []  |    \\___
+  /_o_______________________o_\\
+  [|  REVENANT  ::  ::  ::    |]
+  \\__(O)__________________(O)__/`,
+  carWreck:
+`        ___..._______
+   ___ /   x  []      \\__
+  /_o__\\___~~~~~_________o\\
+  [| ##  rust  ##  ##     |]
+  \\__(o)____________(O)___/`,
+  walker:
+`     .-""-.
+    / .--. \\
+    | (oo)  |     ...rrhh...
+    |  ~~   |
+    '.____.'
+    /|    |\\
+   d || || b`,
+  runner:
+`    .-""-.       >>>
+   /  ><  \\    >>>
+   | \\__/ |  >>>
+   '.____.'>>>
+    /| /\\
+   / |/  \\`,
+  brute:
+`    ______
+   /  ||  \\      GRRROOAR
+  | (XX)(X)|
+  |  ====  |
+  /|  []  |\\
+ / |______| \\
+/__|__|  |__|`,
+  horde:
+`  .o. .o. .o. .o. .o.
+  /|\\ /|\\ /|\\ /|\\ /|\\
+  o o o o o o o o o o
+  ...the dead come in waves...`,
+  garage:
+`  _________________________
+ |  [GARAGE]  ___    ___    |
+ |  =======  |o o|  |o o|   |
+ |  tools // wrench // weld |
+ |_________________________|`,
+  camp:
+`        (  )   (   )  )
+         ) (   )  (  (
+         ( )  (    ) )
+         _____________
+        /    SAFE     \\
+       /___ ZONE ______\\`,
+  skull:
+`     ___
+    /   \\
+   | x x |
+   |  ^  |
+    \\ - /
+     '-'`,
+  sun:
+`      \\ | /
+    '- (.) -'     a red dawn
+      / | \\`,
+};
+
+/* ----------------------------- CONTENT --------------------------------- */
+
+const ARCHETYPES = [
+  { id:'drifter', name:'THE DRIFTER', blurb:'Quick, lucky, light on their feet.',
+    stats:{ maxHp:34, atk:5, def:2, agi:6, scav:1 }, perk:'lucky',
+    perkText:'Lucky — better odds on scavenging & one free upgrade reroll per choice.' },
+  { id:'soldier', name:'THE EX-SOLDIER', blurb:'Hits hard, takes hits harder.',
+    stats:{ maxHp:46, atk:7, def:4, agi:3, scav:0 }, perk:'tough',
+    perkText:'Hardened — takes 1 less damage from every hit.' },
+  { id:'mechanic', name:'THE MECHANIC', blurb:'Born in a garage. The ride loves them.',
+    stats:{ maxHp:38, atk:4, def:3, agi:4, scav:1 }, perk:'gearhead',
+    perkText:'Gearhead — vehicle mods cost 25% less scrap; ride starts sturdier.' },
+];
+
+const STARTER_VEHICLES = [
+  { id:'beater', name:'THE REVENANT', blurb:'A rusted-out sedan that refuses to die.',
+    stats:{ maxInteg:40, armor:2, ram:5, speed:4, fuelMax:60 } },
+  { id:'van', name:'OLD BESSIE', blurb:'A panel van. Slow, but it can take a beating.',
+    stats:{ maxInteg:55, armor:4, ram:4, speed:2, fuelMax:80 } },
+];
+
+// Survivor upgrade pool. repeatable:true means it can be offered again & stacks.
+const SURV_UPGRADES = [
+  { id:'iron_grip', name:'Iron Grip', desc:'+3 melee attack', rare:1, apply:s=>s.surv.atk+=3 },
+  { id:'thick_skin', name:'Thick Skin', desc:'+2 defense', rare:1, apply:s=>s.surv.def+=2 },
+  { id:'adrenaline', name:'Adrenaline', desc:'+12 max HP (and heal it)', rare:1, apply:s=>{s.surv.maxHp+=12;s.surv.hp+=12;} },
+  { id:'fleet', name:'Fleet Footed', desc:'+3 agility (turn order & fleeing)', rare:1, apply:s=>s.surv.agi+=3 },
+  { id:'scav_eye', name:"Scavenger's Eye", desc:'+1 scavenging (more loot)', rare:1, apply:s=>s.surv.scav+=1 },
+  { id:'crit', name:'Killer Instinct', desc:'+10% critical hit chance', rare:2, repeatable:true, apply:s=>s.surv.crit+=10 },
+  { id:'second_wind', name:'Second Wind', desc:'Heal 18% HP after each win', rare:2, apply:s=>s.surv.flags.secondWind=true },
+  { id:'berserk', name:'Berserker', desc:'+60% damage while below 1/3 HP', rare:2, apply:s=>s.surv.flags.berserk=true },
+  { id:'regen', name:'Iron Constitution', desc:'Regenerate 3 HP every combat turn', rare:2, repeatable:true, apply:s=>s.surv.regen+=3 },
+  { id:'medic', name:'Field Medic', desc:'+1 medkit now, and find them more often', rare:2, apply:s=>{s.surv.flags.medic=true;s.inv.medkits++;} },
+  { id:'lifesteal', name:'Savage', desc:'Heal for 20% of melee damage dealt', rare:3, apply:s=>s.surv.flags.lifesteal=true },
+  { id:'execute', name:'Headhunter', desc:'Instantly kill enemies under 18% HP', rare:3, apply:s=>s.surv.flags.execute=true },
+  { id:'dodge', name:'Sixth Sense', desc:'15% chance to dodge any attack entirely', rare:3, repeatable:true, apply:s=>s.surv.dodge+=15 },
+];
+
+// Vehicle upgrade pool.
+const VEH_UPGRADES = [
+  { id:'plating', name:'Reinforced Plating', desc:'+3 armor', rare:1, repeatable:true, apply:s=>s.veh.armor+=3 },
+  { id:'engine', name:'Tuned Engine', desc:'+3 speed', rare:1, repeatable:true, apply:s=>s.veh.speed+=3 },
+  { id:'ram', name:'Spiked Ram', desc:'+5 ram damage', rare:1, repeatable:true, apply:s=>s.veh.ram+=5 },
+  { id:'chassis', name:'Welded Chassis', desc:'+18 max integrity (and repair it)', rare:1, repeatable:true, apply:s=>{s.veh.maxInteg+=18;s.veh.integ+=18;} },
+  { id:'tank', name:'Auxiliary Fuel Tank', desc:'+25 max fuel (and top up)', rare:1, apply:s=>{s.veh.fuelMax+=25;s.fuel=Math.min(s.veh.fuelMax,s.fuel+25);} },
+  { id:'tires', name:'Off-Road Tires', desc:'Halves ambush chance on the road', rare:2, apply:s=>s.veh.flags.tires=true },
+  { id:'autorepair', name:'Repair Rig', desc:'Restore 12 integrity after each fight', rare:2, repeatable:true, apply:s=>s.veh.autorepair+=12 },
+  { id:'turret', name:'Roof Turret', desc:'Auto-fires for 6 dmg every combat turn', rare:2, repeatable:true, apply:s=>s.veh.turret+=6 },
+  { id:'nitro', name:'Nitrous Injection', desc:'25% chance of a bonus ram each turn', rare:2, apply:s=>s.veh.flags.nitro=true },
+  { id:'flamer', name:'Flame Jets', desc:'Ramming also burns the whole horde', rare:3, apply:s=>s.veh.flags.flamer=true },
+  { id:'plow', name:'The Grim Plow', desc:'Ram damage scales with your speed', rare:3, apply:s=>s.veh.flags.plow=true },
+  { id:'fortress', name:'Rolling Fortress', desc:'+30 max integrity, +5 armor', rare:3, apply:s=>{s.veh.maxInteg+=30;s.veh.integ+=30;s.veh.armor+=5;} },
+];
+
+const ZOMBIES = [
+  { id:'walker', name:'Walker', art:'walker', col:'',     base:{hp:16,atk:5,agi:1}, xp:8,  scrap:4 },
+  { id:'runner', name:'Runner', art:'runner', col:'amber',base:{hp:11,atk:7,agi:6}, xp:11, scrap:5 },
+  { id:'brute',  name:'Brute',  art:'brute',  col:'red',  base:{hp:40,atk:11,agi:0},xp:24, scrap:12 },
+  { id:'spitter',name:'Spitter',art:'walker', col:'blue', base:{hp:18,atk:9,agi:3}, xp:16, scrap:8, armorPierce:true },
+];
+
+// Authored milestone story beats (every MILESTONE miles).
+const MILESTONE = 20;
+const STORY = [
+  { mi:20, speaker:'RADIO', cls:'', art:'sun', lines:[
+    'The dashboard radio coughs to life on its own.',
+    '"...if anyone hears this... the coast. There\'s a boat at the coast. Keep driving. Don\'t stop for the dead, don\'t stop for the living..."',
+    'Then static. But it\'s a direction. It\'s something.' ] },
+  { mi:40, speaker:'SURVIVOR', cls:'', art:'skull', lines:[
+    'A bridge, choked with rusted cars. Bodies in every one.',
+    'Someone spray-painted on the asphalt: THE COAST IS A LIE.',
+    'You grip the wheel a little tighter and drive over it anyway.' ] },
+  { mi:60, speaker:'???', cls:'enemy', art:'horde', lines:[
+    'The road dips into a valley and the valley is MOVING.',
+    'Thousands of them. A tide of grey. This is what the radio was running from.',
+    'No way around. Only through. Bury the pedal.' ] },
+  { mi:80, speaker:'RADIO', cls:'', art:'sun', lines:[
+    'You can smell salt now. Real salt, on real wind.',
+    'The radio, clearer than ever: "Last boat leaves at the red dawn. We see your headlights. Drive. DRIVE."',
+    'The coast. It was real. Just a little further.' ] },
+];
+
+/* ----------------------------- STATE ----------------------------------- */
+const SAVE_KEY = 'dead_miles_save_v1';
+let S = null;
+
+function freshState(arch, veh){
+  const a = ARCHETYPES.find(x=>x.id===arch);
+  const v = STARTER_VEHICLES.find(x=>x.id===veh);
+  const gear = a.perk==='gearhead';
+  const st = {
+    miles:0, scrap:gear?15:8, fuel:Math.round(v.stats.fuelMax*0.6),
+    nextStory:0, danger:1,
+    surv:{
+      name:a.name, perk:a.perk,
+      maxHp:a.stats.maxHp, hp:a.stats.maxHp,
+      atk:a.stats.atk, def:a.stats.def, agi:a.stats.agi, scav:a.stats.scav,
+      crit:5, dodge:0, regen:0,
+      level:1, xp:0, xpNext:30,
+      flags:{}, mods:[],
+    },
+    veh:{
+      name:v.name,
+      maxInteg:v.stats.maxInteg + (gear?15:0), integ:v.stats.maxInteg + (gear?15:0),
+      armor:v.stats.armor + (gear?1:0), ram:v.stats.ram, speed:v.stats.speed,
+      fuelMax:v.stats.fuelMax,
+      autorepair:0, turret:0,
+      flags:{}, mods:[],
+    },
+    inv:{ medkits:1, fuelcans:1 },
+    log:[], over:false,
+  };
+  return st;
+}
+
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
+function load(){ try{ S = JSON.parse(localStorage.getItem(SAVE_KEY)); return !!S; }catch(e){ return false; } }
+function wipe(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} S=null; }
+
+/* ----------------------------- UTIL ------------------------------------ */
+const rnd = (n)=>Math.floor(Math.random()*n);
+const pick = (arr)=>arr[rnd(arr.length)];
+const chance = (pct)=>Math.random()*100 < pct;
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+
+/* ----------------------------- UI LAYER -------------------------------- */
+const UI = {
+  scene:null, choices:null, typing:false, _full:null, _q:[],
+
+  init(){
+    this.scene = document.getElementById('scene');
+    this.choices = document.getElementById('choices');
+  },
+
+  clear(){ this.scene.innerHTML=''; },
+
+  // queue a line to be typed out
+  add(html, cls){
+    const el = document.createElement('div');
+    el.className = 'narr ' + (cls||'');
+    el.innerHTML = html;
+    this.scene.appendChild(el);
+    this._scroll();
+    return el;
+  },
+  art(name, col){
+    const pre = document.createElement('pre');
+    pre.className = 'art ' + (col||'');
+    pre.textContent = ART[name] || '';
+    this.scene.appendChild(pre);
+    this._scroll();
+  },
+  speaker(name, cls){
+    const el = document.createElement('div');
+    el.className='speaker '+(cls||'');
+    el.textContent = name;
+    this.scene.appendChild(el);
+  },
+  rule(){ const e=document.createElement('div'); e.className='rule'; e.textContent='— — — — — — — — — — — —'; this.scene.appendChild(e); },
+
+  // Typewriter for a single narrative line element
+  type(html, cls){
+    return new Promise(res=>{
+      const el = this.add('', cls);
+      const tmp = document.createElement('div'); tmp.innerHTML=html;
+      const text = tmp.textContent;
+      let i=0; this.typing=true; this._full={el,html};
+      el.classList.add('cursor');
+      const step=()=>{
+        if(!this.typing){ // skipped
+          el.innerHTML=html; el.classList.remove('cursor'); this._scroll(); return res();
+        }
+        el.textContent = text.slice(0,i);
+        this._scroll();
+        if(i>=text.length){ el.innerHTML=html; el.classList.remove('cursor'); this.typing=false; return res(); }
+        i++;
+        const c = text[i-1];
+        const d = (c==='.'||c==='!'||c==='?')?34:(c===','?20:12);
+        setTimeout(step,d);
+      };
+      step();
+    });
+  },
+  sceneTap(){ if(this.typing){ this.typing=false; } },
+
+  _scroll(){ this.scene.scrollTop = this.scene.scrollHeight; },
+
+  // choices: [{label, key, cls, cost, disabled, fn}]
+  setChoices(list){
+    this.choices.innerHTML='';
+    list.forEach((c,idx)=>{
+      const b=document.createElement('button');
+      b.className='choice '+(c.cls||'')+(c.disabled?' disabled':'');
+      const key = c.key!==undefined?c.key:(idx+1);
+      let html = '<span class="key">'+key+'</span>'+c.label;
+      if(c.cost) html += '<span class="cost">'+c.cost+'</span>';
+      b.innerHTML=html;
+      if(!c.disabled) b.onclick=()=>{ this.lockBriefly(); c.fn(); };
+      this.choices.appendChild(b);
+    });
+  },
+  tapToContinue(fn){
+    this.setChoices([{label:'▾ tap to continue', cls:'tap', key:'', fn}]);
+  },
+  lockBriefly(){ /* prevent double-fire */ const c=this.choices; c.style.pointerEvents='none'; setTimeout(()=>c.style.pointerEvents='',180); },
+
+  toast(msg, cls){
+    const t=document.getElementById('toast');
+    const e=document.createElement('div'); e.className='toast '+(cls||''); e.innerHTML=msg;
+    t.appendChild(e); setTimeout(()=>e.remove(),2100);
+  },
+
+  hud(){
+    if(!S) return;
+    document.getElementById('hudMiles').textContent=S.miles;
+    document.getElementById('hudScrap').textContent=S.scrap;
+    document.getElementById('hudFuel').textContent=Math.round(S.fuel);
+  },
+
+  openDrawer(){ if(!S) return; this.renderDrawer(); document.getElementById('overlay').classList.add('open'); },
+  closeDrawer(){ document.getElementById('overlay').classList.remove('open'); },
+  renderDrawer(){
+    const s=S.surv, v=S.veh;
+    const bar=(cur,max,cls)=>`<div class="bar ${cls}"><i style="width:${clamp(cur/max*100,0,100)}%"></i></div>`;
+    const flagList=(o,map)=>Object.keys(o.flags||{}).filter(k=>o.flags[k]).map(k=>map[k]||k);
+    const survFlags={secondWind:'Second Wind',berserk:'Berserker',medic:'Field Medic',lifesteal:'Savage',execute:'Headhunter'};
+    const vehFlags={tires:'Off-Road Tires',nitro:'Nitrous',flamer:'Flame Jets',plow:'Grim Plow'};
+    const sMods=flagList(s,survFlags).concat(
+      s.crit>5?['+'+(s.crit-5)+'% crit']:[], s.dodge?['+'+s.dodge+'% dodge']:[], s.regen?['+'+s.regen+' regen']:[]);
+    const vMods=flagList(v,vehFlags).concat(
+      v.autorepair?['repair '+v.autorepair+'/fight']:[], v.turret?['turret '+v.turret]:[]);
+    document.getElementById('drawer').innerHTML=`
+      <h2>STATUS<span class="x" onclick="UI.closeDrawer()">[ close ]</span></h2>
+      <div class="panel">
+        <div class="pt">SURVIVOR // <b>${s.name}</b> · LV ${s.level}</div>
+        <div class="stat"><span class="nm">Health</span><span class="vl">${s.hp}/${s.maxHp}</span>${bar(s.hp,s.maxHp,'hp')}</div>
+        <div class="stat"><span class="nm">XP</span><span class="vl">${s.xp}/${s.xpNext}</span>${bar(s.xp,s.xpNext,'xp')}</div>
+        <div class="stat"><span class="nm">Attack</span><span class="vl">${s.atk}</span></div>
+        <div class="stat"><span class="nm">Defense</span><span class="vl">${s.def}</span></div>
+        <div class="stat"><span class="nm">Agility</span><span class="vl">${s.agi}</span></div>
+        <div class="stat"><span class="nm">Scavenging</span><span class="vl">${s.scav}</span></div>
+        <div class="modlist">${sMods.length?'<span class="tag">mods:</span> '+sMods.map(m=>'<b>'+m+'</b>').join(' · '):'<i>no mods yet</i>'}</div>
+      </div>
+      <div class="panel">
+        <div class="pt">VEHICLE // <b>${v.name}</b></div>
+        <div class="stat"><span class="nm">Integrity</span><span class="vl">${v.integ}/${v.maxInteg}</span>${bar(v.integ,v.maxInteg,'veh')}</div>
+        <div class="stat"><span class="nm">Armor</span><span class="vl">${v.armor}</span></div>
+        <div class="stat"><span class="nm">Ram dmg</span><span class="vl">${v.ram}</span></div>
+        <div class="stat"><span class="nm">Speed</span><span class="vl">${v.speed}</span></div>
+        <div class="stat"><span class="nm">Fuel</span><span class="vl">${Math.round(S.fuel)}/${v.fuelMax}</span>${bar(S.fuel,v.fuelMax,'')}</div>
+        <div class="modlist">${vMods.length?'<span class="tag">mods:</span> '+vMods.map(m=>'<b>'+m+'</b>').join(' · '):'<i>no mods yet</i>'}</div>
+      </div>
+      <div class="panel">
+        <div class="pt">SUPPLIES</div>
+        <div class="modlist">⛭ Scrap <b>${S.scrap}</b> &nbsp;·&nbsp; ✚ Medkits <b>${S.inv.medkits}</b> &nbsp;·&nbsp; ⛽ Fuel cans <b>${S.inv.fuelcans}</b> &nbsp;·&nbsp; Miles <b>${S.miles}</b></div>
+      </div>
+      <div class="center small">DEAD MILES · progress auto-saves to this device</div>
+    `;
+  },
+};
+
+/* ----------------------------- GAME FLOW ------------------------------- */
+const Game = {
+
+  /* ---- title ---- */
+  title(){
+    UI.clear();
+    UI.art('logo','amber');
+    UI.add('<span class="small">a text survival novel · on the road, the dead never sleep</span>');
+    UI.rule();
+    UI.add('You and a junk car against a dead world.', 'dim');
+    UI.add('Upgrade both. Drive forever. See how far you get.', 'dim');
+    const opts=[];
+    if(hasSave()) opts.push({label:'CONTINUE',key:'▸',fn:()=>{ if(load()){ UI.hud(); Game.road("Back on the road."); } }});
+    opts.push({label:'NEW GAME',key:'▸',fn:()=>Game.intro()});
+    if(hasSave()) opts.push({label:'Abandon save & start fresh',key:'✕',cls:'danger',fn:()=>{ wipe(); Game.intro(); }});
+    opts.push({label:'How to play',key:'?',fn:()=>Game.help()});
+    UI.setChoices(opts);
+  },
+
+  help(){
+    UI.clear();
+    UI.speaker('FIELD MANUAL','sys');
+    UI.add('• <b>DRIVE</b> to cover miles toward the coast. Each mile burns fuel and risks an encounter.','dim');
+    UI.add('• <b>FIGHT</b> with your Survivor (melee) and your Vehicle (ram). Both have their own stats.','dim');
+    UI.add('• <b>SCRAP ⛭</b> buys upgrades & repairs. <b>FUEL ⛽</b> keeps you moving — run dry and you\'re stranded.','dim');
+    UI.add('• <b>LEVEL UP</b> your survivor to pick new perks. Use the <b>GARAGE</b> to bolt mods onto your ride.','dim');
+    UI.add('• Tap <b>STATUS</b> (top right) anytime to see your build. Everything auto-saves.','dim');
+    UI.add('• It\'s endless. There is no winning, only further. Good luck.','warn');
+    UI.tapToContinue(()=>Game.title());
+  },
+
+  /* ---- intro / character creation ---- */
+  async intro(){
+    UI.clear();
+    UI.art('carWreck','red');
+    UI.speaker('DAY 41');
+    await UI.type('The cities fell in a week. The armies in two.');
+    await UI.type('You\'ve been walking for so long you\'d forgotten what an engine sounds like — until you found <b>this</b>. Half-dead, like everything else. But it turns over.');
+    await UI.type('A full tank of nothing and a road going somewhere. Time to decide who\'s driving.');
+    UI.tapToContinue(()=>Game.pickArch());
+  },
+
+  pickArch(){
+    UI.clear();
+    UI.speaker('WHO ARE YOU?','sys');
+    UI.add('The apocalypse files everyone down to one sharp edge. What\'s yours?','dim');
+    UI.setChoices(ARCHETYPES.map((a,i)=>({
+      key:i+1,
+      label:`<b>${a.name}</b><br><span class="small">${a.blurb} · ${a.perkText}</span>`,
+      fn:()=>{ Game._arch=a.id; Game.pickVeh(); }
+    })));
+  },
+
+  pickVeh(){
+    UI.clear();
+    UI.speaker('YOUR RIDE','sys');
+    UI.add('Two heaps in the lot still have a pulse. Pick the one you\'ll bleed for.','dim');
+    UI.setChoices(STARTER_VEHICLES.map((v,i)=>({
+      key:i+1,
+      label:`<b>${v.name}</b><br><span class="small">${v.blurb}</span>`,
+      fn:()=>{ S=freshState(Game._arch, v.id); save(); UI.hud(); Game.beginRun(); }
+    })));
+  },
+
+  async beginRun(){
+    UI.clear();
+    UI.art('car','blue');
+    await UI.type(`You slide into the <b>${S.veh.name}</b>. The seat is somebody else's. You don't think about that.`);
+    await UI.type('Key. Turn. Cough. Roar. The dead three lots over lift their heads.');
+    await UI.type('You point the hood at the horizon and go.');
+    UI.tapToContinue(()=>Game.road('The road unrolls ahead, cracked and endless.'));
+  },
+
+  /* ---- the road hub ---- */
+  road(intro){
+    if(S.over) return;
+    save();
+    UI.clear();
+    UI.hud();
+    UI.art('road');
+    if(intro) UI.add(intro,'dim');
+    const lowFuel = S.fuel < 8;
+    const lowHp = S.surv.hp < S.surv.maxHp*0.4;
+    if(lowFuel) UI.add('⛽ The fuel needle is kissing empty.','warn');
+    if(lowHp) UI.add('✚ You\'re hurt. Badly.','bad');
+    UI.add('<span class="small">Mile '+S.miles+' · next landmark in '+(MILESTONE-(S.miles%MILESTONE))+' mi</span>');
+
+    const opts=[
+      { label:'DRIVE ON <span class="small">— cover ground (−fuel)</span>', key:'▸',
+        disabled:S.fuel<2, fn:()=>Game.drive() },
+      { label:'SCAVENGE the roadside <span class="small">— risk it for loot</span>', key:'⛭', fn:()=>Game.scavenge() },
+      { label:'GARAGE <span class="small">— upgrade your ride</span>', key:'⚒', fn:()=>Game.garage() },
+      { label:'REST &amp; REPAIR <span class="small">— patch up, risk an ambush</span>', key:'✚', fn:()=>Game.rest() },
+    ];
+    if(S.inv.fuelcans>0) opts.push({ label:'Use a fuel can <span class="small">— +30 fuel</span>', key:'⛽', cls:'pickup',
+      fn:()=>{ S.inv.fuelcans--; S.fuel=Math.min(S.veh.fuelMax,S.fuel+30); UI.toast('+30 fuel','blue'); Game.road(); } });
+    opts.push({ label:'Save &amp; quit to title', key:'✕', cls:'danger', fn:()=>{ save(); Game.title(); } });
+
+    if(S.fuel<2){
+      UI.add('Out of fuel. If you can\'t find more, this is where you die.','bad');
+    }
+    UI.setChoices(opts);
+  },
+
+  /* ---- driving: consume fuel, advance, roll event ---- */
+  async drive(){
+    UI.clear();
+    UI.art('road');
+    const burn = 4 + rnd(3);
+    S.fuel = Math.max(0, S.fuel - burn);
+    S.miles += 1;
+    S.danger = 1 + Math.floor(S.miles/12);
+    UI.hud();
+    await UI.type('Miles tick by. The engine drinks '+burn+' fuel. <span class="small">('+S.miles+' mi)</span>');
+
+    // milestone story beat?
+    if(S.miles % MILESTONE === 0 && S.nextStory < STORY.length){
+      return Game.storyBeat();
+    }
+    // roll an encounter
+    let ambush = 28 + S.danger*2;
+    if(S.veh.flags.tires) ambush/=2;
+    const roll = rnd(100);
+    if(roll < ambush){ return Game.combat(false); }
+    if(roll < ambush+18){ return Game.findGarage(); }
+    if(roll < ambush+34){ return Game.roadEvent(); }
+    // quiet stretch
+    await UI.type(pick([
+      'For once, nothing. Just wind and the smell of rot.',
+      'An empty stretch. You let yourself breathe.',
+      'Abandoned cars line the median like gravestones. None move.',
+      'A billboard, half-burned: SEE YOU AT THE COAST! :)' ]),'dim');
+    if(chance(35)){ const f=3+rnd(5); S.scrap+=f; UI.toast('+'+f+' scrap','amber'); UI.add('You pocket some scrap from a wreck. <span class="small">+'+f+' ⛭</span>','loot'); }
+    UI.hud();
+    UI.tapToContinue(()=>Game.road());
+  },
+
+  async storyBeat(){
+    const beat = STORY[S.nextStory]; S.nextStory++;
+    UI.clear();
+    if(beat.art) UI.art(beat.art, beat.speaker==='???'?'red':'amber');
+    UI.speaker(beat.speaker, beat.cls);
+    for(const ln of beat.lines){ await UI.type(ln); }
+    save();
+    // milestone also spawns a tougher fight (a "boss" horde) every other beat
+    if(S.nextStory % 2 === 0){
+      UI.add('And the noise of your engine has drawn a crowd...','bad');
+      UI.tapToContinue(()=>Game.combat(true));
+    } else {
+      UI.tapToContinue(()=>Game.road());
+    }
+  },
+
+  async roadEvent(){
+    const ev = pick(['hitchhiker','wreck','blockade','dog']);
+    UI.clear();
+    if(ev==='hitchhiker'){
+      UI.speaker('STRANGER','');
+      await UI.type('A figure on the shoulder waves you down. Could be a survivor. Could be bait.');
+      UI.setChoices([
+        {label:'Slow down and help', key:1, fn:async()=>{
+          UI.clear();
+          if(chance(60)){ const sc=8+rnd(10); S.scrap+=sc; if(chance(40))S.inv.medkits++;
+            await UI.type('They\'re real. Grateful. They press supplies into your hands before melting back into the ruins.');
+            UI.toast('+'+sc+' scrap','amber'); UI.tapToContinue(()=>Game.road()); }
+          else { await UI.type('It lunges the second you brake — never alive at all.'); UI.tapToContinue(()=>Game.combat(false)); }
+        }},
+        {label:'Floor it past them', key:2, cls:'danger', fn:()=>{ UI.toast('You drive on.'); Game.road('You don\'t look in the mirror.'); }},
+      ]);
+    } else if(ev==='wreck'){
+      UI.speaker('ROADSIDE','sys');
+      await UI.type('A jackknifed fuel truck blocks half the road. The tank might still have something in it.');
+      UI.setChoices([
+        {label:'Siphon the tank', key:1, cls:'pickup', fn:async()=>{
+          UI.clear(); const f=15+rnd(20); S.fuel=Math.min(S.veh.fuelMax,S.fuel+f);
+          await UI.type('Diesel gurgles into your tank. <span class="small">+'+f+' fuel</span>'); UI.hud();
+          if(chance(35)){ await UI.type('The smell brings company.'); UI.tapToContinue(()=>Game.combat(false)); }
+          else UI.tapToContinue(()=>Game.road());
+        }},
+        {label:'Too risky — drive around', key:2, fn:()=>Game.road()},
+      ]);
+    } else if(ev==='dog'){
+      UI.speaker('???','');
+      await UI.type('A dog trots alongside the car for a mile, tongue out, tail going. Then it veers off into a field, alive and unbothered.');
+      await UI.type('Stupid, but it makes you smile. First time in weeks.');
+      if(chance(50)){ S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+6); UI.toast('+6 HP (morale)','red'); }
+      UI.tapToContinue(()=>Game.road());
+    } else {
+      UI.speaker('BLOCKADE','sys');
+      await UI.type('Cars dragged across the road. A trap, or a barricade someone died defending. Boxes of supplies still sit behind it.');
+      UI.setChoices([
+        {label:'Ram through the barricade', key:1, cls:'danger', fn:async()=>{
+          UI.clear(); const dmg=3+rnd(6); S.veh.integ=Math.max(1,S.veh.integ-Math.max(0,dmg-S.veh.armor));
+          const sc=10+rnd(12); S.scrap+=sc;
+          await UI.type('Metal screams. You burst through. <span class="small">−'+dmg+' integrity, +'+sc+' scrap</span>'); UI.hud();
+          UI.tapToContinue(()=>Game.road());
+        }},
+        {label:'Pick through it carefully on foot', key:2, fn:async()=>{
+          UI.clear();
+          if(chance(55)){ const sc=12+rnd(14); S.scrap+=sc; if(chance(30))S.inv.fuelcans++;
+            await UI.type('Quiet hands, quick work. You strip it clean. <span class="small">+'+sc+' scrap</span>'); UI.toast('+'+sc+' scrap','amber'); UI.tapToContinue(()=>Game.road()); }
+          else { await UI.type('A shape rises from between the cars.'); UI.tapToContinue(()=>Game.combat(false)); }
+        }},
+      ]);
+    }
+  },
+
+  /* ---- scavenge from the hub ---- */
+  async scavenge(){
+    UI.clear();
+    UI.speaker('SCAVENGING','sys');
+    await UI.type(pick([
+      'You pull over at a gutted gas station and start digging.',
+      'A row of dead houses. Somebody\'s whole life, free for the taking.',
+      'An overturned semi, doors hanging open like a promise.' ]));
+    const luck = 45 + S.surv.scav*8 + (S.surv.perk==='lucky'?10:0);
+    if(chance(luck)){
+      const kind = pick(['scrap','scrap','fuel','medkit','fuelcan']);
+      if(kind==='scrap'){ const v=10+rnd(12)+S.surv.scav*2; S.scrap+=v; UI.toast('+'+v+' scrap','amber'); await UI.type('Jackpot — a toolbox of usable parts. <span class="small">+'+v+' ⛭</span>','loot'); }
+      else if(kind==='fuel'){ const v=12+rnd(16); S.fuel=Math.min(S.veh.fuelMax,S.fuel+v); UI.toast('+'+v+' fuel','blue'); await UI.type('A jerrycan with something left in it. <span class="small">+'+v+' fuel</span>','loot'); }
+      else if(kind==='medkit'){ S.inv.medkits++; UI.toast('+1 medkit','red'); await UI.type('A sealed first-aid kit. Worth its weight in gold now. <span class="small">+1 ✚</span>','loot'); }
+      else { S.inv.fuelcans++; UI.toast('+1 fuel can','blue'); await UI.type('A full fuel can, capped and waiting. <span class="small">+1 ⛽-can</span>','loot'); }
+      UI.hud();
+      if(chance(25+S.danger*2)){ await UI.type('The noise of your rummaging carries. Something answers it.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
+      UI.tapToContinue(()=>Game.road());
+    } else {
+      await UI.type('Picked clean. Whoever came before you wasn\'t gentle.','dim');
+      if(chance(40+S.danger*2)){ await UI.type('And you\'re not alone in the ruins.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
+      UI.tapToContinue(()=>Game.road());
+    }
+  },
+
+  /* ---- rest & repair ---- */
+  async rest(){
+    UI.clear();
+    UI.art('camp','amber');
+    UI.speaker('MAKESHIFT CAMP','sys');
+    await UI.type('You find a defensible spot — a fenced lot, a collapsed overpass — and stop to patch yourself and the car.');
+    const heal = Math.round(S.surv.maxHp*0.35);
+    const fix = Math.round(S.veh.maxInteg*0.30);
+    S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+heal);
+    S.veh.integ=Math.min(S.veh.maxInteg,S.veh.integ+fix);
+    await UI.type('You bind your wounds (+'+heal+' HP) and hammer out the worst of the dents (+'+fix+' integrity).','good');
+    UI.hud();
+    if(chance(40+S.danger*3)){ await UI.type('But rest is a luxury, and the dead collect on luxuries.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
+    await UI.type('The night passes, somehow, quiet.','dim');
+    UI.tapToContinue(()=>Game.road());
+  },
+
+  /* ---- garage (found or chosen) ---- */
+  async findGarage(){
+    UI.clear();
+    UI.art('garage','amber');
+    UI.speaker('ABANDONED GARAGE','sys');
+    await UI.type('A repair shop, lights dead but the lift still works by hand. A place to make your ride meaner.');
+    UI.tapToContinue(()=>Game.garage(true));
+  },
+  garage(found){
+    UI.clear();
+    UI.art('garage','amber');
+    UI.speaker('GARAGE // VEHICLE MODS','sys');
+    UI.add('Bolt parts onto <b>'+S.veh.name+'</b>. Scrap on hand: <b>'+S.scrap+' ⛭</b>','dim');
+    // offer 3 vehicle upgrades, priced by rarity & gearhead discount
+    const offers = Game.rollOffers(VEH_UPGRADES, S.veh.mods, 3);
+    const disc = S.surv.perk==='gearhead'?0.75:1;
+    const opts = offers.map((u,i)=>{
+      const cost = Math.round((10 + u.rare*12 + S.miles) * disc);
+      return { key:i+1, cls:'pickup', cost:cost+' ⛭',
+        disabled:S.scrap<cost,
+        label:`<b>${u.name}</b><br><span class="small">${u.desc}</span>`,
+        fn:()=>{ S.scrap-=cost; u.apply(S); if(!u.repeatable)S.veh.mods.push(u.id); UI.toast('Installed: '+u.name,'blue'); save(); Game.garage(found); } };
+    });
+    // repair option
+    const repairCost = Math.ceil((S.veh.maxInteg-S.veh.integ)/4);
+    if(S.veh.integ<S.veh.maxInteg) opts.push({ key:'R', cost:repairCost+' ⛭', disabled:S.scrap<repairCost||repairCost===0,
+      label:'<b>Full repair</b><br><span class="small">restore integrity to max</span>',
+      fn:()=>{ S.scrap-=repairCost; S.veh.integ=S.veh.maxInteg; UI.toast('Repaired','blue'); save(); Game.garage(found); } });
+    opts.push({ key:'▸', label:'Back to the road', fn:()=>Game.road() });
+    UI.setChoices(opts);
+  },
+
+  /* ---- roll N distinct upgrade offers, respecting taken/repeatable ---- */
+  rollOffers(pool, taken, n){
+    let avail = pool.filter(u=>u.repeatable || !taken.includes(u.id));
+    // weight by rarity (rarer = less common)
+    const out=[];
+    const bag=[];
+    avail.forEach(u=>{ const w = u.rare===1?5:u.rare===2?3:1; for(let i=0;i<w;i++)bag.push(u); });
+    while(out.length<n && bag.length){
+      const u=bag.splice(rnd(bag.length),1)[0];
+      if(!out.includes(u)) out.push(u);
+    }
+    // fall back to procedural endless boosts if pool exhausted
+    while(out.length<n){ out.push(Game.procUpgrade(pool===VEH_UPGRADES)); }
+    return out;
+  },
+
+  // endless procedurally-scaling boost so upgrades never run out
+  procUpgrade(isVeh){
+    const tier = 1 + Math.floor(S.miles/15);
+    if(isVeh){
+      const k = pick(['armor','ram','speed','integ']);
+      const amt = tier + rnd(tier+1);
+      const map={armor:['Field Plating','+'+amt+' armor',s=>s.veh.armor+=amt],
+                 ram:['Scrap Spikes','+'+(amt*2)+' ram',s=>s.veh.ram+=amt*2],
+                 speed:['Stripped Frame','+'+amt+' speed',s=>s.veh.speed+=amt],
+                 integ:['Patch Welds','+'+(amt*6)+' max integ',s=>{s.veh.maxInteg+=amt*6;s.veh.integ+=amt*6;}]};
+      return { id:'proc', name:map[k][0]+' '+tier, desc:map[k][1], rare:1, repeatable:true, apply:map[k][2] };
+    } else {
+      const k = pick(['atk','def','hp','agi']);
+      const amt = tier + rnd(tier+1);
+      const map={atk:['Sharpened Edge','+'+amt+' attack',s=>s.surv.atk+=amt],
+                 def:['Scrap Armor','+'+amt+' defense',s=>s.surv.def+=amt],
+                 hp:['Hard Living','+'+(amt*5)+' max HP',s=>{s.surv.maxHp+=amt*5;s.surv.hp+=amt*5;}],
+                 agi:['Wiry','+'+amt+' agility',s=>s.surv.agi+=amt]};
+      return { id:'proc', name:map[k][0]+' '+tier, desc:map[k][1], rare:1, repeatable:true, apply:map[k][2] };
+    }
+  },
+
+  /* ===================== COMBAT ===================== */
+  combat(boss){
+    // build a horde
+    const n = boss ? 3+rnd(3) : 1+rnd(Math.min(3,1+Math.floor(S.danger/2)));
+    const foes=[];
+    for(let i=0;i<n;i++){
+      let tpl = boss && i===0 ? ZOMBIES.find(z=>z.id==='brute') : pick(ZOMBIES);
+      const scale = 1 + S.danger*0.18;
+      foes.push({
+        tpl, name:tpl.name,
+        hp:Math.round(tpl.base.hp*scale)+(boss?20:0),
+        maxHp:Math.round(tpl.base.hp*scale)+(boss?20:0),
+        atk:Math.round(tpl.base.atk*scale), agi:tpl.base.agi,
+        pierce:tpl.armorPierce,
+      });
+    }
+    Game._cb = { foes, boss, turn:1 };
+    Game.combatIntro();
+  },
+
+  async combatIntro(){
+    const cb=Game._cb;
+    UI.clear();
+    UI.art(cb.boss?'horde':cb.foes[0].tpl.art, cb.foes[0].tpl.col || (cb.boss?'red':''));
+    UI.speaker(cb.boss?'THE HORDE':'CONTACT','enemy');
+    await UI.type(cb.boss
+      ? 'They come from everywhere at once — '+cb.foes.length+' of them, and one big enough to block out the sky.'
+      : (cb.foes.length>1?cb.foes.length+' of them peel off a wreck and come for you.':'A '+cb.foes[0].name+' fixes on you and charges.'));
+    Game.combatTurn();
+  },
+
+  combatTurn(){
+    const cb=Game._cb;
+    if(S.surv.hp<=0 || S.veh.integ<=0) return Game.death();
+    if(cb.foes.length===0) return Game.victory();
+    UI.clear();
+    // enemy roster
+    UI.speaker('THREATS','enemy');
+    cb.foes.forEach((f,i)=>{
+      UI.add(`<span class="small">[${i+1}]</span> <b>${f.name}</b> &nbsp;HP ${f.hp}/${f.maxHp} &nbsp;<span class="small">atk ${f.atk}${f.pierce?' · pierces armor':''}</span>`, 'bad');
+    });
+    UI.rule();
+    UI.add(`<span class="small">YOU ${S.surv.hp}/${S.surv.maxHp} HP ✚ &nbsp;|&nbsp; ${S.veh.name} ${S.veh.integ}/${S.veh.maxInteg} ⚙</span>`);
+
+    const opts=[
+      { key:'⚔', label:'MELEE the nearest <span class="small">— your attack '+Game.survDmgText()+'</span>', fn:()=>Game.playerMelee(0) },
+      { key:'⊕', label:'RAM with the '+S.veh.name+' <span class="small">— hits hard, takes damage</span>', fn:()=>Game.playerRam() },
+    ];
+    if(cb.foes.length>1){
+      opts[0].label='MELEE a target <span class="small">— pick who</span>';
+      opts[0].fn=()=>Game.chooseTarget(t=>Game.playerMelee(t));
+    }
+    if(S.inv.medkits>0) opts.push({ key:'✚', cls:'pickup', label:'Use medkit <span class="small">— heal ~40%</span>',
+      fn:()=>{ S.inv.medkits--; const h=Math.round(S.surv.maxHp*0.4); S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); UI.toast('+'+h+' HP','red'); Game.enemyPhase('You patch yourself mid-fight (+'+h+' HP).'); } });
+    opts.push({ key:'⤺', cls:'danger', label:'FLOOR IT — try to escape <span class="small">— speed vs the swarm</span>', fn:()=>Game.flee() });
+    UI.setChoices(opts);
+  },
+
+  survDmgText(){ const lo=S.surv.atk, hi=S.surv.atk+5; return lo+'–'+hi; },
+
+  chooseTarget(then){
+    const cb=Game._cb;
+    UI.setChoices(cb.foes.map((f,i)=>({ key:i+1, cls:'danger',
+      label:`Strike <b>${f.name}</b> <span class="small">(${f.hp} HP)</span>`,
+      fn:()=>then(i) })).concat([{key:'↩',label:'back',fn:()=>Game.combatTurn()}]));
+  },
+
+  rollSurvDamage(){
+    let dmg = S.surv.atk + rnd(6);
+    let crit=false;
+    if(chance(S.surv.crit)){ dmg=Math.round(dmg*2); crit=true; }
+    if(S.surv.flags.berserk && S.surv.hp < S.surv.maxHp/3) dmg=Math.round(dmg*1.6);
+    return {dmg,crit};
+  },
+
+  async playerMelee(ti){
+    const cb=Game._cb; const f=cb.foes[ti]; if(!f) return Game.combatTurn();
+    const {dmg,crit}=Game.rollSurvDamage();
+    UI.clear();
+    UI.speaker('YOU','');
+    let killed=false;
+    if(S.surv.flags.execute && f.hp <= f.maxHp*0.18){
+      f.hp=0; killed=true;
+      await UI.type('You drive your blade through its skull — <b>execution</b>. It drops instantly.','good');
+    } else {
+      f.hp-=dmg; if(f.hp<=0)killed=true;
+      await UI.type((crit?'<b>CRITICAL!</b> ':'')+'You smash the '+f.name+' for <b>'+dmg+'</b>.'+(crit?' Bone gives.':''),'good');
+      if(S.surv.flags.lifesteal){ const h=Math.round(dmg*0.2); S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); if(h>0)UI.toast('+'+h+' HP','red'); }
+    }
+    if(killed){ await UI.type('The '+f.name+' crumples.','dim'); cb.foes.splice(ti,1); }
+    Game.afterPlayerAction();
+  },
+
+  async playerRam(){
+    const cb=Game._cb;
+    let dmg = S.veh.ram + rnd(6) + (S.veh.flags.plow?S.veh.speed:0);
+    UI.clear();
+    UI.speaker(S.veh.name,'');
+    // ram nearest; recoil damage to vehicle
+    const f=cb.foes[0];
+    f.hp-=dmg;
+    await UI.type('You gun it and slam the '+f.name+' for <b>'+dmg+'</b>. Wet crunch of impact.','good');
+    if(S.veh.flags.flamer){ cb.foes.forEach(z=>{ if(z!==f){ const b=4+rnd(5); z.hp-=b; } }); await UI.type('Flame jets wash over the rest of the pack.','warn'); }
+    if(S.veh.flags.nitro && chance(25)){ const f2=cb.foes[0]; if(f2){ const d2=Math.round(dmg*0.6); f2.hp-=d2; await UI.type('NITRO kicks — a second impact for '+d2+'!','warn'); } }
+    // recoil
+    const recoil=Math.max(0, 2+rnd(4) - Math.floor(S.veh.armor/2));
+    if(recoil>0){ S.veh.integ=Math.max(0,S.veh.integ-recoil); await UI.type('The hit rattles your ride. <span class="small">−'+recoil+' integrity</span>','dim'); }
+    // clear dead
+    Game._cb.foes = cb.foes.filter(z=>z.hp>0);
+    if(cb.foes.length>Game._cb.foes.length) UI.add('Bodies tumble under the wheels.','dim');
+    Game.afterPlayerAction();
+  },
+
+  afterPlayerAction(){
+    const cb=Game._cb;
+    // passive turret
+    if(S.veh.turret>0 && cb.foes.length){ const t=cb.foes[0]; t.hp-=S.veh.turret; UI.add('Roof turret stitches the '+t.name+' for '+S.veh.turret+'.','dim'); }
+    Game._cb.foes = cb.foes.filter(z=>z.hp>0);
+    UI.hud();
+    if(Game._cb.foes.length===0) return UI.tapToContinue(()=>Game.victory());
+    UI.tapToContinue(()=>Game.enemyPhase());
+  },
+
+  async enemyPhase(pre){
+    const cb=Game._cb;
+    UI.clear();
+    UI.speaker('THE DEAD','enemy');
+    if(pre) UI.add(pre,'dim');
+    // survivor regen
+    if(S.surv.regen>0 && S.surv.hp<S.surv.maxHp){ S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+S.surv.regen); }
+    for(const f of cb.foes){
+      if(S.surv.hp<=0||S.veh.integ<=0) break;
+      // dodge?
+      if(S.surv.dodge && chance(S.surv.dodge)){ await UI.type('You twist aside — the '+f.name+'\'s lunge finds nothing.','dim'); continue; }
+      // target: mostly survivor, sometimes vehicle
+      const atVeh = chance(35);
+      let dmg = f.atk + rnd(3);
+      if(atVeh){
+        const armor = f.pierce?0:S.veh.armor;
+        const taken=Math.max(1,dmg-armor);
+        S.veh.integ=Math.max(0,S.veh.integ-taken);
+        await UI.type('The '+f.name+' claws into the '+S.veh.name+'. <span class="small">−'+taken+' integrity</span>','bad');
+      } else {
+        let def = S.surv.def + (S.surv.perk==='tough'?1:0);
+        if(f.pierce) def=Math.floor(def/2);
+        const taken=Math.max(1,dmg-def);
+        S.surv.hp=Math.max(0,S.surv.hp-taken);
+        await UI.type('The '+f.name+' tears into you. <span class="small">−'+taken+' HP</span>','bad');
+      }
+    }
+    UI.hud();
+    if(S.surv.hp<=0||S.veh.integ<=0) return UI.tapToContinue(()=>Game.death());
+    Game._cb.turn++;
+    UI.tapToContinue(()=>Game.combatTurn());
+  },
+
+  async flee(){
+    const cb=Game._cb;
+    UI.clear();
+    UI.speaker('ESCAPE','sys');
+    const fastest=Math.max(...cb.foes.map(f=>f.agi));
+    const mine=S.surv.agi + Math.floor(S.veh.speed/2) + rnd(6);
+    if(mine > fastest+2 || S.fuel<2 && chance(40)){
+      await UI.type('You break contact, fishtail onto open road, and leave them clawing at your dust.','good');
+      // small fuel cost
+      S.fuel=Math.max(0,S.fuel-3); UI.hud();
+      UI.tapToContinue(()=>Game.road('Heart pounding, you put miles between you and them.'));
+    } else {
+      await UI.type('Too slow — they swarm the car before you can build speed. One free swipe each.','bad');
+      // enemies get a free hit, then back to combat
+      for(const f of cb.foes){ const taken=Math.max(1,f.atk-S.surv.def); S.surv.hp=Math.max(0,S.surv.hp-taken); }
+      UI.hud();
+      if(S.surv.hp<=0) return UI.tapToContinue(()=>Game.death());
+      UI.tapToContinue(()=>Game.combatTurn());
+    }
+  },
+
+  async victory(){
+    const cb=Game._cb;
+    UI.clear();
+    UI.art('skull','dim');
+    UI.speaker('CLEARED','sys');
+    // rewards
+    let xp=0, scrap=0;
+    // recompute from a fresh roster snapshot count (use boss flag + danger)
+    const killed = Game._lastKilled || (cb.boss?5:2);
+    xp = (cb.boss?40:0) + 8 + S.danger*4 + rnd(8);
+    scrap = (cb.boss?20:0) + 5 + S.danger*2 + rnd(6) + S.surv.scav*2;
+    S.surv.xp += xp; S.scrap += scrap;
+    await UI.type('The last of them stops twitching. You\'re still breathing. <span class="small">+'+xp+' XP · +'+scrap+' scrap</span>','good');
+    // second wind
+    if(S.surv.flags.secondWind){ const h=Math.round(S.surv.maxHp*0.18); S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); UI.toast('Second Wind +'+h+' HP','red'); }
+    // vehicle autorepair
+    if(S.veh.autorepair>0){ S.veh.integ=Math.min(S.veh.maxInteg,S.veh.integ+S.veh.autorepair); UI.toast('Repair Rig +'+S.veh.autorepair,'blue'); }
+    // drop chance
+    if(chance(30)){ S.inv.medkits++; UI.add('You loot a medkit from the bodies. <span class="small">+1 ✚</span>','loot'); }
+    if(chance(20)){ S.inv.fuelcans++; UI.add('One of them died clutching a fuel can. <span class="small">+1 ⛽-can</span>','loot'); }
+    UI.hud(); save();
+    // level up?
+    if(S.surv.xp >= S.surv.xpNext){ return UI.tapToContinue(()=>Game.levelUp()); }
+    UI.tapToContinue(()=>Game.road());
+  },
+
+  levelUp(){
+    while(S.surv.xp>=S.surv.xpNext){ S.surv.xp-=S.surv.xpNext; S.surv.level++; S.surv.xpNext=Math.round(S.surv.xpNext*1.35+10); }
+    S.surv.maxHp+=4; S.surv.hp=S.surv.maxHp; // small base bump + full heal on level
+    UI.clear();
+    UI.art('sun','amber');
+    UI.speaker('LEVEL UP — LV '+S.surv.level,'sys');
+    UI.add('You\'re sharper, harder, harder to kill. (+4 max HP, fully healed) Choose what hardens next:','good');
+    let offers = Game.rollOffers(SURV_UPGRADES, S.surv.mods, 3);
+    const render=()=>{
+      UI.setChoices(offers.map((u,i)=>({
+        key:i+1, cls:'pickup',
+        label:`<b>${u.name}</b><br><span class="small">${u.desc}</span>`,
+        fn:()=>{ u.apply(S); if(!u.repeatable)S.surv.mods.push(u.id); UI.toast('Learned: '+u.name,'red'); save(); Game.road('Stronger now. The road waits.'); }
+      })).concat(
+        S.surv.perk==='lucky' && !Game._rerolled ? [{key:'↻',cls:'danger',label:'Reroll choices <span class="small">(Lucky)</span>',fn:()=>{ Game._rerolled=true; offers=Game.rollOffers(SURV_UPGRADES,S.surv.mods,3); render(); }}] : []
+      ));
+    };
+    Game._rerolled=false;
+    render();
+  },
+
+  death(){
+    S.over=true; save();
+    UI.clear();
+    UI.art('carWreck','red');
+    UI.speaker('THE ROAD ENDS','enemy');
+    const survived=S.miles;
+    UI.add(S.surv.hp<=0
+      ? 'They drag you out through the broken window. You don\'t feel the last of it.'
+      : 'The engine dies with a final cough, and the dead close over the '+S.veh.name+' like water.','bad');
+    UI.rule();
+    UI.add('<b>'+S.surv.name+'</b> made it <b>'+survived+' miles</b> · Level '+S.surv.level+'.','dim');
+    UI.add(survived>=80?'Far enough to see the sea. Far enough to matter.':survived>=40?'Further than most. Not far enough.':'The road is long and you were not.','dim');
+    UI.add('<span class="small">The dead keep what they take. But the road remembers.</span>');
+    wipe();
+    UI.setChoices([
+      { key:'▸', label:'DRIVE AGAIN <span class="small">— new survivor, new ride</span>', fn:()=>Game.intro() },
+      { key:'✕', label:'Back to title', fn:()=>Game.title() },
+    ]);
+  },
+};
+
+/* ----------------------------- BOOT ------------------------------------ */
+window.addEventListener('load', ()=>{ UI.init(); Game.title(); });
+// keyboard support for desktop testing (1-9, space/enter to continue)
+window.addEventListener('keydown', (e)=>{
+  if(UI.typing && (e.key===' '||e.key==='Enter')){ UI.sceneTap(); e.preventDefault(); return; }
+  const btns=document.querySelectorAll('#choices .choice');
+  if(/^[1-9]$/.test(e.key)){ const b=btns[parseInt(e.key)-1]; if(b)b.click(); }
+  if((e.key===' '||e.key==='Enter') && btns.length===1){ btns[0].click(); e.preventDefault(); }
+});
+</script>
+</body>
+</html>
