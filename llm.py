@@ -78,4 +78,111 @@ def _fallback_generate(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     closer = "Even if it wasn’t perfect, it moved the story forward — and that counts."
     if mood in {"Great", "Good"}:
-        closer = "It wasn’t a huge day, but it was a
+        closer = "It wasn’t a huge day, but it was a good one — worth remembering."
+    paragraphs.append(closer)
+
+    story_markdown = "\n\n".join(paragraphs)
+
+    highlights = {
+        "best_moment": memorable_text if memorable else "",
+        "hardest_moment": challenges_text if challenges else "",
+        "todays_win": wins_text if wins else "",
+        "lesson": learnings_text if learnings else "",
+    }
+
+    theme = "calm"
+    if mood == "Great":
+        theme = "energetic"
+    elif mood == "Rough":
+        theme = "cosy"
+
+    template = "minimal_editorial"
+    if went_anywhere and where:
+        template = "postcard_map"
+    if media_count >= 3:
+        template = "polaroid_trail"
+
+    return {
+        "title": title or "Today",
+        "story_markdown": story_markdown,
+        "highlights": highlights,
+        "theme": theme,
+        "template": template,
+    }
+
+
+def generate_journal(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Returns a dict:
+    {
+      "title": str,
+      "story_markdown": str,
+      "highlights": {...},
+      "theme": str,
+      "template": str
+    }
+    Uses OpenAI if OPENAI_API_KEY is present; otherwise falls back to a local generator.
+    """
+    use_openai = bool(os.getenv("OPENAI_API_KEY"))
+
+    if not use_openai:
+        return _fallback_generate(payload)
+
+    themes = ["calm", "energetic", "adventurous", "cosy"]
+    templates = ["minimal_editorial", "postcard_map", "polaroid_trail"]
+
+    try:
+        from openai import OpenAI
+
+        client = OpenAI()
+
+        system = (
+            "You are a thoughtful journaling assistant. "
+            "Write a warm, human, first-person journal entry based on the user's day. "
+            "Avoid clichés, avoid purple prose. Keep it grounded and specific. "
+            "Return STRICT JSON with keys: title, story_markdown, highlights, theme, template."
+        )
+
+        user = {
+            "instructions": {
+                "themes_allowed": themes,
+                "templates_allowed": templates,
+                "rules": [
+                    "Pick a theme from themes_allowed that matches the mood/energy.",
+                    "Pick a template from templates_allowed that fits the content.",
+                    "highlights keys: best_moment, hardest_moment, todays_win, lesson (any can be empty).",
+                    "story_markdown should be 3-6 short paragraphs.",
+                    "Keep it authentic and specific to the inputs.",
+                ],
+            },
+            "day": payload,
+        }
+
+        resp = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(user, ensure_ascii=False)},
+            ],
+            temperature=0.8,
+            response_format={"type": "json_object"},
+        )
+
+        content = resp.choices[0].message.content or "{}"
+        data = json.loads(content)
+
+        # Coerce/validate minimal shape
+        out = {
+            "title": data.get("title") or "Today",
+            "story_markdown": data.get("story_markdown") or "",
+            "highlights": data.get("highlights") or {},
+            "theme": data.get("theme") if data.get("theme") in themes else "calm",
+            "template": data.get("template") if data.get("template") in templates else "minimal_editorial",
+        }
+        if not out["story_markdown"].strip():
+            return _fallback_generate(payload)
+        return out
+
+    except Exception:
+        # Any failure (network, auth, parsing, SDK) → graceful local fallback
+        return _fallback_generate(payload)
