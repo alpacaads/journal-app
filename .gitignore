@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local runtime data (SQLite DB + uploaded media) — not source
+data/journal.db
+data/media/*
+!data/media/.gitkeep
+
+# OS / editor
+.DS_Store
+.streamlit/secrets.toml
