@@ -170,9 +170,9 @@
   <div id="hud">
     <span class="title">DEAD&nbsp;MILES</span>
     <span class="spacer"></span>
-    <span class="chip mi">MI <b id="hudMiles">0</b></span>
+    <span class="chip mi">ACT <b id="hudMiles">1</b></span>
     <span class="chip scrap">⛭ <b id="hudScrap">0</b></span>
-    <span class="chip fuel">⛽ <b id="hudFuel">0</b></span>
+    <span class="chip fuel">HORDE <b id="hudFuel">0</b></span>
     <button id="statsBtn" onclick="UI.openDrawer()">STATUS</button>
   </div>
 
@@ -309,21 +309,92 @@ const ART = {
 const ARCHETYPES = [
   { id:'drifter', name:'THE DRIFTER', blurb:'Quick, lucky, light on their feet.',
     stats:{ maxHp:34, atk:5, def:2, agi:6, scav:1 }, perk:'lucky',
-    perkText:'Lucky — better odds on scavenging & one free upgrade reroll per choice.' },
+    perkText:'Lucky — better scavenging & a free upgrade reroll.' },
   { id:'soldier', name:'THE EX-SOLDIER', blurb:'Hits hard, takes hits harder.',
     stats:{ maxHp:46, atk:7, def:4, agi:3, scav:0 }, perk:'tough',
     perkText:'Hardened — takes 1 less damage from every hit.' },
   { id:'mechanic', name:'THE MECHANIC', blurb:'Born in a garage. The ride loves them.',
     stats:{ maxHp:38, atk:4, def:3, agi:4, scav:1 }, perk:'gearhead',
-    perkText:'Gearhead — vehicle mods cost 25% less scrap; ride starts sturdier.' },
+    perkText:'Gearhead — vehicle mods 25% cheaper; sturdier ride.' },
+  { id:'brawler', name:'THE BRAWLER', blurb:'All muscle, no brakes.', unlock:35,
+    stats:{ maxHp:52, atk:9, def:3, agi:2, scav:0 }, perk:'berserk_start',
+    perkText:'Bloodlust — starts with the Berserker skill (+60% dmg when low).' },
+  { id:'scrapper', name:'THE SCRAPPER', blurb:'Finds treasure in every ruin.', unlock:35,
+    stats:{ maxHp:36, atk:5, def:2, agi:5, scav:3 }, perk:'lucky',
+    perkText:'Magpie — huge scavenging, starts with extra scrap.' },
 ];
 
 const STARTER_VEHICLES = [
-  { id:'beater', name:'THE REVENANT', blurb:'A rusted-out sedan that refuses to die.',
+  { id:'beater', name:'THE REVENANT', blurb:'A rusted sedan that refuses to die.',
     stats:{ maxInteg:40, armor:2, ram:5, speed:4, fuelMax:60 } },
-  { id:'van', name:'OLD BESSIE', blurb:'A panel van. Slow, but it can take a beating.',
+  { id:'van', name:'OLD BESSIE', blurb:'A panel van. Slow, but it soaks hits.',
     stats:{ maxInteg:55, armor:4, ram:4, speed:2, fuelMax:80 } },
+  { id:'moto', name:'THE WIDOW', blurb:'A stripped motorcycle. Fast and fragile.', unlock:30,
+    stats:{ maxInteg:24, armor:0, ram:3, speed:10, fuelMax:45 } },
+  { id:'muscle', name:'THE BLACK MASS', blurb:'A muscle car built to ram.', unlock:45,
+    stats:{ maxInteg:38, armor:1, ram:10, speed:7, fuelMax:55 } },
+  { id:'pickup', name:'THE MULE', blurb:'A pickup made for mounting guns.', unlock:40,
+    stats:{ maxInteg:50, armor:3, ram:6, speed:5, fuelMax:65 } },
+  { id:'bus', name:'THE ARK', blurb:'An armoured school bus. A fortress on wheels.', unlock:70,
+    stats:{ maxInteg:85, armor:6, ram:5, speed:2, fuelMax:100 } },
+  { id:'apc', name:'THE COFFIN', blurb:'A military APC. Nothing stops it.', unlock:100,
+    stats:{ maxInteg:72, armor:10, ram:9, speed:3, fuelMax:85 } },
 ];
+
+// Relics — rare, build-defining passives found in caches, elites and bosses.
+const RELICS = [
+  { id:'blood_engine', name:'Blood Engine', desc:'Heal 2 HP for every enemy you kill.' },
+  { id:'vulture',      name:'Vulture Protocol', desc:'+3 scrap whenever an enemy dies.' },
+  { id:'nitro_saint',  name:'Nitro Saint', desc:'Every ram has a 40% chance to strike twice.' },
+  { id:'glass_cannon', name:'Glass Cannon', desc:'+60% damage dealt, but −30% max HP.', onGain:s=>{ s.veh.flags._glass=true; s.surv.maxHp=Math.max(8,Math.round(s.surv.maxHp*0.7)); s.surv.hp=Math.min(s.surv.hp,s.surv.maxHp); } },
+  { id:'hoarder',      name:"Hoarder's Map", desc:'+2 scavenging, and caches give more.', onGain:s=>{ s.surv.scav+=2; } },
+  { id:'lead_foot',    name:'Lead Foot', desc:'Start every stage 1 step further ahead of the horde.' },
+  { id:'razor_hull',   name:'Razor Hull', desc:'Attackers take 4 damage when they strike your vehicle.' },
+  { id:'reapers_favor',name:"Reaper's Favor", desc:'Instantly kill any non-elite under 25% HP.' },
+  { id:'overclock',    name:'Overclocked Core', desc:'+15% crit chance and +2 roof turret.', onGain:s=>{ s.surv.crit+=15; s.veh.turret+=2; } },
+  { id:'phoenix',      name:'Phoenix Cell', desc:'Once per run, cheat death and rise at 1 HP.' },
+  { id:'engine_saint', name:'Iron Lung', desc:'+20 max integrity and repair 8 after each fight.', onGain:s=>{ s.veh.maxInteg+=20; s.veh.integ+=20; s.veh.autorepair+=8; } },
+  { id:'adrenal',      name:'Adrenal Surge', desc:'+10% dodge and +2 agility.', onGain:s=>{ s.surv.dodge+=10; s.surv.agi+=2; } },
+];
+function relicById(id){ return RELICS.find(r=>r.id===id); }
+
+// Meta-progression: permanent unlocks bought with Salvage banked across runs.
+const META_STORE = [
+  { id:'moto',    type:'vehicle', cost:30, name:'Unlock: THE WIDOW',  desc:'Fast, fragile motorcycle.' },
+  { id:'pickup',  type:'vehicle', cost:40, name:'Unlock: THE MULE',   desc:'Pickup — weapon mounts.' },
+  { id:'muscle',  type:'vehicle', cost:45, name:'Unlock: THE BLACK MASS', desc:'Muscle car ram-cannon.' },
+  { id:'bus',     type:'vehicle', cost:70, name:'Unlock: THE ARK',    desc:'Armoured bus fortress.' },
+  { id:'apc',     type:'vehicle', cost:100,name:'Unlock: THE COFFIN', desc:'Unstoppable military APC.' },
+  { id:'brawler', type:'survivor',cost:35, name:'Unlock: THE BRAWLER',desc:'Heavy-hitting survivor.' },
+  { id:'scrapper',type:'survivor',cost:35, name:'Unlock: THE SCRAPPER',desc:'Loot-finding survivor.' },
+  { id:'p_medkit',type:'perk', cost:20, name:'Field Kit', desc:'Start every run with +1 medkit and +8 max HP.' },
+  { id:'p_scrap', type:'perk', cost:25, name:'Stockpile', desc:'Start every run with +25 scrap.' },
+  { id:'p_relic', type:'perk', cost:60, name:'Lucky Find', desc:'Start every run with a random relic already equipped.' },
+  { id:'p_lead',  type:'perk', cost:40, name:'Head Start', desc:'Begin each run 2 stages further ahead of the horde.' },
+];
+
+// Acts of a run — a forward push to the coast. Each ends in a boss.
+const ACTS = [
+  { name:'THE RUSTBELT',   sub:'choked highways, dead suburbs', faction:'convoy',
+    bossName:'THE CRUSHER',  bossLine:'A Brute the size of a truck drags itself across the road, and it has friends.' },
+  { name:'THE FLOODLANDS',  sub:'drowned farms under a low grey sky', faction:'reaper',
+    bossName:'THE BOG TYRANT', bossLine:'The water erupts — a Tyrant, swollen and vast, rises from the flood.' },
+  { name:'THE COAST',      sub:'salt-eaten ruins and the last boat', faction:'haven',
+    bossName:'THE HARBOUR HORDE', bossLine:'Every dead thing for miles has come to stop you reaching the pier.' },
+];
+const ACT_LEN = 5; // node choices before the act boss
+
+// Route node types and how to render them.
+const NODE_TYPES = {
+  fight:  { icon:'⚔', label:'Ambush',     desc:'a pack of the dead', time:1 },
+  elite:  { icon:'☠', label:'Elite',      desc:'a mutated horror — relic if you win', time:1 },
+  scav:   { icon:'⛭', label:'Scavenge',   desc:'loot, but it costs time', time:2 },
+  garage: { icon:'⚒', label:'Garage',     desc:'upgrade your ride', time:1 },
+  market: { icon:'⛁', label:'Outpost',    desc:'a faction market', time:1 },
+  camp:   { icon:'✚', label:'Camp',       desc:'rest &amp; repair (slow)', time:2 },
+  event:  { icon:'?', label:'Crossroads', desc:'an uncertain encounter', time:1 },
+  cache:  { icon:'◈', label:'Cache',      desc:'a relic, sealed in a wreck', time:2 },
+};
 
 // Survivor upgrade pool. repeatable:true means it can be offered again & stacks.
 const SURV_UPGRADES = [
@@ -501,12 +572,14 @@ function freshState(arch, veh){
   const v = STARTER_VEHICLES.find(x=>x.id===veh);
   const gear = a.perk==='gearhead';
   const st = {
-    miles:0, scrap:gear?15:8, fuel:Math.round(v.stats.fuelMax*0.6),
+    miles:0, scrap:gear?15:8, fuel:v.stats.fuelMax,
     danger:1,
-    // open world
-    loc:WORLD.start, visited:[WORLD.start], discovered:[WORLD.start].concat(WORLD.regions[WORLD.start].links),
-    seenBeats:[], endless:false,
-    objective:'Reach the coast. There are rumours of a boat.',
+    // roguelike run
+    act:1, stage:0, lead:5, route:null, choices:null, node:null,
+    relics:[], endless:false,
+    run:{ kills:0, elites:0, bosses:0, relics:0, score:0 },
+    nodeFaction:null, objective:'Outrun the horde. Reach the coast and the last boat.',
+    seenBeats:[], _inBoss:false, _pendingRelic:false, _phoenixUsed:false,
     // zombie evolution
     seenStrains:[], tactics:{melee:0, ram:0},
     // factions
@@ -533,15 +606,27 @@ function freshState(arch, veh){
   return st;
 }
 
-function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+function save(){ try{ if(S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
+function clearSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
 function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
 function load(){ try{ S = JSON.parse(localStorage.getItem(SAVE_KEY)); return !!S; }catch(e){ return false; } }
 function wipe(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} S=null; }
 
+/* ----------------------------- META (persistent) ----------------------- */
+const META_KEY = 'dead_miles_meta_v1';
+let META = null;
+function defaultMeta(){ return { salvage:0, bestScore:0, runs:0, escapes:0, deepestAct:1,
+  vehicles:['beater','van'], survivors:['drifter','soldier','mechanic'], perks:[] }; }
+function loadMeta(){ try{ META = JSON.parse(localStorage.getItem(META_KEY)); }catch(e){} if(!META || !META.vehicles) META = defaultMeta(); return META; }
+function saveMeta(){ try{ localStorage.setItem(META_KEY, JSON.stringify(META)); }catch(e){} }
+function metaHas(id){ return META.vehicles.includes(id) || META.survivors.includes(id) || META.perks.includes(id); }
+
 /* ----------------------------- UTIL ------------------------------------ */
-const rnd = (n)=>Math.floor(Math.random()*n);
+let RNG = Math.random; // swapped to a seeded generator during Daily runs
+function mulberry32(seed){ let a=seed>>>0; return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+const rnd = (n)=>Math.floor(RNG()*n);
 const pick = (arr)=>arr[rnd(arr.length)];
-const chance = (pct)=>Math.random()*100 < pct;
+const chance = (pct)=>RNG()*100 < pct;
 const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ----------------------------- UI LAYER -------------------------------- */
@@ -640,9 +725,9 @@ const UI = {
 
   hud(){
     if(!S) return;
-    document.getElementById('hudMiles').textContent=S.miles;
+    document.getElementById('hudMiles').textContent=S.act||1;
     document.getElementById('hudScrap').textContent=S.scrap;
-    document.getElementById('hudFuel').textContent=Math.round(S.fuel);
+    document.getElementById('hudFuel').textContent=(S.lead>=0?S.lead:0)+' back';
   },
 
   openDrawer(){ if(!S) return; this.renderDrawer(); document.getElementById('overlay').classList.add('open'); },
@@ -675,8 +760,11 @@ const UI = {
         <div class="stat"><span class="nm">Armor</span><span class="vl">${v.armor}</span></div>
         <div class="stat"><span class="nm">Ram dmg</span><span class="vl">${v.ram}</span></div>
         <div class="stat"><span class="nm">Speed</span><span class="vl">${v.speed}</span></div>
-        <div class="stat"><span class="nm">Fuel</span><span class="vl">${Math.round(S.fuel)}/${v.fuelMax}</span>${bar(S.fuel,v.fuelMax,'')}</div>
         <div class="modlist">${vMods.length?'<span class="tag">mods:</span> '+vMods.map(m=>'<b>'+m+'</b>').join(' · '):'<i>no mods yet</i>'}</div>
+      </div>
+      <div class="panel">
+        <div class="pt">RELICS ◈ ${S.relics&&S.relics.length?'':'<i>none yet</i>'}</div>
+        <div class="modlist">${(S.relics||[]).map(id=>{const r=relicById(id);return r?'<b>'+r.name+'</b> <span class="small">— '+r.desc+'</span>':'';}).join('<br>')}</div>
       </div>
       <div class="panel">
         <div class="pt">FACTIONS ${S.ally?'// allied: <b>'+FACTION_INFO[S.ally].name+'</b>':''}</div>
@@ -688,10 +776,10 @@ const UI = {
         }).join('')}</div>
       </div>
       <div class="panel">
-        <div class="pt">SUPPLIES</div>
-        <div class="modlist">⛭ Scrap <b>${S.scrap}</b> &nbsp;·&nbsp; ✚ Medkits <b>${S.inv.medkits}</b> &nbsp;·&nbsp; ⛽ Fuel cans <b>${S.inv.fuelcans}</b> &nbsp;·&nbsp; Miles <b>${S.miles}</b></div>
+        <div class="pt">RUN</div>
+        <div class="modlist">Act <b>${S.act}</b> · stage <b>${Math.min(S.stage+1,ACT_LEN+1)}/${ACT_LEN+1}</b> · horde <b>${Math.max(0,S.lead)}</b> back<br>⛭ Scrap <b>${S.scrap}</b> · ✚ Medkits <b>${S.inv.medkits}</b> · kills <b>${S.run.kills}</b> · relics <b>${S.run.relics}</b></div>
       </div>
-      <div class="center small">DEAD MILES · progress auto-saves to this device</div>
+      <div class="center small">DEAD MILES · run auto-saves to this device</div>
     `;
   },
 };
@@ -701,266 +789,309 @@ const Game = {
 
   /* ---- title ---- */
   title(){
+    loadMeta();
     UI.clear();
     UI.art('logo','amber');
-    UI.add('<span class="small">a text survival novel · on the road, the dead never sleep</span>');
+    UI.add('<span class="small">a roguelike road-trip · outrun the dead, reach the coast</span>');
     UI.rule();
-    UI.add('You and a junk car against a dead world.', 'dim');
-    UI.add('Upgrade both. Drive forever. See how far you get.', 'dim');
+    UI.add('Every run, push for the boat. You\'ll die — and come back tougher.', 'dim');
+    UI.add('<span class="small">⛭ Salvage banked <b style="color:var(--amber)">'+META.salvage+'</b> &nbsp;·&nbsp; best score <b>'+META.bestScore+'</b> &nbsp;·&nbsp; escapes <b>'+META.escapes+'</b></span>');
     const opts=[];
-    if(hasSave()) opts.push({label:'CONTINUE',key:'▸',fn:()=>{ if(load()){ UI.hud(); Game.resume("Back on the road."); } }});
-    opts.push({label:'NEW GAME',key:'▸',fn:()=>Game.intro()});
-    if(hasSave()) opts.push({label:'Abandon save & start fresh',key:'✕',cls:'danger',fn:()=>{ wipe(); Game.intro(); }});
-    opts.push({label:'How to play',key:'?',fn:()=>Game.help()});
+    if(hasSave()) opts.push({key:'▸',label:'<b>CONTINUE RUN</b>',fn:()=>{ if(load()){ RNG=Math.random; UI.hud(); Game.routeMap('Back on the road.'); } }});
+    opts.push({key:'▸',label:'<b>NEW RUN</b>',fn:()=>Game.newRun(false)});
+    opts.push({key:'◷',label:'DAILY RUN <span class="small">— one seed, everyone, today</span>',fn:()=>Game.newRun(true)});
+    opts.push({key:'⚒',label:'THE GARAGE <span class="small">— spend salvage on permanent unlocks</span>',cls:'pickup',fn:()=>Game.metaHub()});
+    opts.push({key:'?',label:'How to play',fn:()=>Game.help()});
     UI.setChoices(opts);
   },
 
   help(){
     UI.clear();
     UI.speaker('FIELD MANUAL','sys');
-    UI.add('• The <b>MAP</b> is your hub. Pick a <b>road</b> to drive to a connected region — each leg burns fuel and risks an encounter.','dim');
-    UI.add('• <b>SETTLEMENTS</b> (Convoy, Haven, Reapers, Remnant) have markets, garages, and safe rest. <b>RUINS</b> &amp; <b>WILDS</b> are for scavenging — and dying.','dim');
-    UI.add('• <b>FIGHT</b> with your Survivor (melee) and your Vehicle (ram). Both level &amp; upgrade independently, endlessly.','dim');
-    UI.add('• <b>SCRAP ⛭</b> buys upgrades &amp; goods. <b>FUEL ⛽</b> keeps you moving — run dry on the road and you\'re stranded.','dim');
-    UI.add('• Tap <b>STATUS</b> (top right) anytime to see your build. Everything auto-saves to this device.','dim');
-    UI.add('• Find the boat. Reach the Pier. Then survival mode never ends. Good luck, driver.','warn');
+    UI.add('• A <b>RUN</b> is a forward push to the coast. At each step you choose your next stop on the <b>route</b>.','dim');
+    UI.add('• The <b>HORDE</b> chases you from behind. Slow stops (scavenge, camp, caches) let it close. If it catches you, you fight for your life.','dim');
+    UI.add('• <b>FIGHT</b> with your Survivor (melee) &amp; Vehicle (ram). Level up for perks, garages for mods.','dim');
+    UI.add('• <b>RELICS ◈</b> are rare, build-defining passives from caches, elites &amp; bosses. Stack them into broken combos.','dim');
+    UI.add('• Death banks <b>Salvage ⛭</b> — spend it in <b>THE GARAGE</b> for permanent unlocks (new rides, survivors, perks). Start stronger every run.','dim');
+    UI.add('• Escape the coast for a huge score, then keep going endlessly. Beat your best.','warn');
     UI.tapToContinue(()=>Game.title());
   },
 
-  /* ---- intro / character creation ---- */
-  async intro(){
-    UI.clear();
-    UI.art('carWreck','red');
-    UI.speaker('DAY 41');
-    await UI.type('The cities fell in a week. The armies in two.');
-    await UI.type('You\'ve been walking for so long you\'d forgotten what an engine sounds like — until you found <b>this</b>. Half-dead, like everything else. But it turns over.');
-    await UI.type('A full tank of nothing and a road going somewhere. Time to decide who\'s driving.');
-    UI.tapToContinue(()=>Game.pickArch());
-  },
-
-  pickArch(){
-    UI.clear();
-    UI.speaker('WHO ARE YOU?','sys');
-    UI.add('The apocalypse files everyone down to one sharp edge. What\'s yours?','dim');
-    UI.setChoices(ARCHETYPES.map((a,i)=>({
-      key:i+1,
-      label:`<b>${a.name}</b><br><span class="small">${a.blurb} · ${a.perkText}</span>`,
-      fn:()=>{ Game._arch=a.id; Game.pickVeh(); }
-    })));
-  },
-
-  pickVeh(){
-    UI.clear();
-    UI.speaker('YOUR RIDE','sys');
-    UI.add('Two heaps in the lot still have a pulse. Pick the one you\'ll bleed for.','dim');
-    UI.setChoices(STARTER_VEHICLES.map((v,i)=>({
-      key:i+1,
-      label:`<b>${v.name}</b><br><span class="small">${v.blurb}</span>`,
-      fn:()=>{ S=freshState(Game._arch, v.id); save(); UI.hud(); Game.beginRun(); }
-    })));
-  },
-
-  async beginRun(){
-    UI.clear();
-    UI.art('car','blue');
-    await UI.type(`You slide into the <b>${S.veh.name}</b>. The seat is somebody else's. You don't think about that.`);
-    await UI.type('Key. Turn. Cough. Roar. The dead three lots over lift their heads.');
-    await UI.type('You point the hood at the open road. Somewhere out there is a way out of all this. Time to go find it.');
-    UI.tapToContinue(()=>Game.worldMap('You pull out of the lot. The whole dead world is yours to cross.'));
-  },
-
-  /* ---- routing: after any event, continue travel or return to the map ---- */
-  resume(msg){
-    if(!S || S.over) return;
-    save();
-    if(Game._travel) return Game.travelStep();
-    return Game.worldMap(msg);
-  },
-
-  /* ---- the open-world map (main hub) ---- */
-  worldMap(msg){
-    if(!S || S.over) return;
-    save();
-    UI.clear(); UI.hud();
-    const r = WORLD.regions[S.loc];
-    UI.artText(renderMap());
-    UI.speaker(r.name.toUpperCase(),'sys');
-    UI.add('<span class="small">control: <b>'+FACTIONS[r.faction]+'</b> &nbsp;·&nbsp; threat <span style="color:var(--red)">'+threatDots(r.danger)+'</span> &nbsp;·&nbsp; mutation tier <b>'+Game.mutTier()+'</b></span>');
-    UI.add(r.desc,'dim');
-    // faction standing in this territory
-    const fac = r.faction;
-    const isFac = fac in FACTION_INFO;
-    const rel = isFac ? factionRelation(fac) : 'neutral';
-    if(isFac){
-      const tag = rel==='ally' ? '<b style="color:var(--ink)">★ ALLIED</b>'
-                : rel==='hostile' ? '<b style="color:var(--red)">⚔ HOSTILE</b>'
-                : standingLabel(S.rep[fac])+' <span class="small">('+(S.rep[fac]>=0?'+':'')+S.rep[fac]+')</span>';
-      UI.add('<span class="small">standing with '+FACTION_INFO[fac].name+': '+tag+'</span>', rel==='hostile'?'bad':'');
-    }
-    if(msg) UI.add(msg);
-    if(S.fuel < 6) UI.add('⛽ Fuel critical — not enough to take the road.','warn');
-    if(S.surv.hp < S.surv.maxHp*0.4) UI.add('✚ You\'re badly hurt.','bad');
-    if(isFac && rel==='hostile') UI.add('They know your colours here. No welcome at the gate — and their patrols haunt the roads out.','bad');
-    UI.add('<span class="small">▸ objective: '+(S.objective||'Survive.')+'</span>','warn');
-
+  /* ---- meta hub: permanent unlocks ---- */
+  metaHub(){
+    loadMeta();
+    UI.clear(); UI.art('garage','amber'); UI.speaker('THE GARAGE','sys');
+    UI.add('Permanent unlocks, bought with <b style="color:var(--amber)">Salvage ⛭</b> banked from every run.','dim');
+    UI.add('<span class="small">Salvage <b style="color:var(--amber)">'+META.salvage+'</b> &nbsp;·&nbsp; runs <b>'+META.runs+'</b> · escapes <b>'+META.escapes+'</b> · best <b>'+META.bestScore+'</b></span>');
     const opts=[];
-    const SVC={
-      scavenge:{ key:'⛭', label:'SCAVENGE here <span class="small">— risk it for loot</span>', fn:()=>Game.scavenge() },
-      garage:  { key:'⚒', label:'GARAGE <span class="small">— upgrade the ride</span>', fn:()=>Game.garage() },
-      market:  { key:'⛁', label:'MARKET <span class="small">— trade scrap for goods</span>', fn:()=>Game.market() },
-      rest:    { key:'✚', label:'REST &amp; REPAIR <span class="small">— patch up</span>', fn:()=>Game.rest() },
-      intel:   { key:'☣', label:'TALK to the Remnant <span class="small">— intel &amp; story</span>', fn:()=>Game.intel() },
-    };
-    // Hostile factions slam their doors; only scavenging the outskirts remains.
-    const facServiceBlocked = (s)=> isFac && rel==='hostile' && s!=='scavenge';
-    (r.services||[]).forEach(s=>{ if(SVC[s] && !facServiceBlocked(s)) opts.push(SVC[s]); });
-    // Faction job (rep) — at a settlement that isn't hostile to you
-    if(isFac && r.type==='settlement' && rel!=='hostile'){
-      opts.push({ key:'✦', cls:'pickup', label:'Take a job for '+FACTION_INFO[fac].name+' <span class="small">— earn standing</span>', fn:()=>Game.factionJob(fac) });
-    }
-    // Pledge / defect — when you're trusted enough and not already sworn here
-    if(isFac && r.type==='settlement' && rel!=='hostile' && S.ally!==fac && S.rep[fac] >= FACTION_INFO[fac].pledgeAt){
-      const defect = !!S.ally;
-      opts.push({ key:'⚑', cls:'danger',
-        label:(defect?'Defect — pledge to ':'Pledge allegiance to ')+FACTION_INFO[fac].name+' <span class="small">'+(defect?'— betrays '+FACTION_INFO[S.ally].name:'— unlocks their perks, makes rivals hostile')+'</span>',
-        fn:()=>Game.pledge(fac) });
-    }
-    if(S.inv.fuelcans>0) opts.push({ key:'⛽', cls:'pickup', label:'Use a fuel can <span class="small">+30 fuel</span>',
-      fn:()=>{ S.inv.fuelcans--; S.fuel=Math.min(S.veh.fuelMax,S.fuel+30); UI.toast('+30 fuel','blue'); Game.worldMap(); } });
-
-    opts.push({ key:'', cls:'disabled', disabled:true, label:'<span class="small">— — ROADS FROM HERE — —</span>', fn:()=>{} });
-    const canGo = S.fuel >= 6;
-    r.links.forEach(id=>{
-      const d = WORLD.regions[id];
-      const known = S.discovered.includes(id) && S.visited.includes(id);
-      const seen = S.discovered.includes(id);
-      const name = seen ? d.name : 'Uncharted road';
-      const meta = seen ? ('· '+FACTIONS[d.faction]+' · threat <span style="color:var(--red)">'+threatDots(d.danger)+'</span>') : '· unknown territory';
-      opts.push({ key:'→', disabled:!canGo,
-        label:'<b>'+name+'</b> <span class="small">'+meta+'</span>'+(canGo?'':' <span class="small">[no fuel]</span>'),
-        fn:()=>Game.travel(id) });
+    META_STORE.forEach(it=>{
+      const owned = metaHas(it.id);
+      opts.push({ key: owned?'✓':'⛭', cls: owned?'':'pickup', cost: owned?'owned':it.cost+' ⛭',
+        disabled: owned || META.salvage<it.cost,
+        label:'<b>'+it.name+'</b><br><span class="small">'+it.desc+'</span>',
+        fn:()=>{ META.salvage-=it.cost;
+          if(it.type==='vehicle') META.vehicles.push(it.id);
+          else if(it.type==='survivor') META.survivors.push(it.id);
+          else META.perks.push(it.id);
+          saveMeta(); UI.toast('Unlocked: '+it.name,'amber'); Game.metaHub(); } });
     });
-    if(!canGo) opts.push({ key:'⛽', cls:'danger', label:'SEARCH for fuel <span class="small">— desperate, risky</span>', fn:()=>Game.searchFuel() });
-    opts.push({ key:'✕', cls:'danger', label:'Save &amp; quit to title', fn:()=>{ save(); Game.title(); } });
+    opts.push({ key:'▸', label:'Back to title', fn:()=>Game.title() });
     UI.setChoices(opts);
   },
 
-  /* ---- travel between regions: a chain of road encounters ---- */
-  travel(destId){
-    Game._travel = { dest:destId, legs:2+rnd(2), leg:0 };
-    UI.toast('Setting out for '+WORLD.regions[destId].name);
-    Game.travelStep();
+  /* ---- start a new run ---- */
+  newRun(daily){
+    loadMeta();
+    Game._daily = daily;
+    if(daily){ const d=new Date(); Game._seed=(d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate())>>>0; }
+    Game.pickSurvivor();
   },
-
-  async travelStep(){
-    const t = Game._travel;
-    if(!t) return Game.worldMap();
-    if(S.surv.hp<=0 || S.veh.integ<=0) return;
-    if(t.leg >= t.legs){ Game._travel=null; return Game.arrive(t.dest); }
-    t.leg++;
-    const dest = WORLD.regions[t.dest];
-    let burn = 4 + rnd(3);
-    if(S.ally==='convoy') burn = Math.max(2, burn-2); // Convoy fuel economy
-    S.fuel = Math.max(0, S.fuel - burn);
-    S.miles += 1;
-    S.danger = dest.danger + Math.floor(S.miles/15) + (S.endless?3:0);
-    UI.hud();
-    if(S.fuel <= 0) return Game.stranded();
-    UI.clear(); UI.art('road');
-    await UI.type('Leg '+t.leg+'/'+t.legs+' toward <b>'+dest.name+'</b>. The engine drinks '+burn+' fuel. <span class="small">('+S.miles+' mi)</span>');
-    // hostile-faction patrols hunt their own turf
-    if(S.ally && factionRelation(dest.faction)==='hostile' && chance(32)){
-      return Game.combat(false, {patrol:dest.faction});
-    }
-    let ambush = 26 + S.danger*2;
-    if(S.veh.flags.tires) ambush/=2;
-    const roll = rnd(100);
-    if(roll < ambush) return Game.combat(false);
-    if(roll < ambush+16) return Game.roadEvent();
-    if(roll < ambush+26) return Game.findGarage();
-    await UI.type(pick([
-      'For once, nothing. Just wind and the smell of rot.',
-      'An empty stretch of road. You let yourself breathe.',
-      'Abandoned cars line the median like gravestones. None move.',
-      'A faded billboard: SEE YOU AT THE COAST! :)' ]),'dim');
-    if(chance(35)){ const f=3+rnd(6); S.scrap+=f; UI.toast('+'+f+' scrap','amber'); UI.add('You strip some scrap from a wreck. <span class="small">+'+f+' ⛭</span>','loot'); }
-    UI.hud();
-    UI.tapToContinue(()=>Game.resume());
+  pickSurvivor(){
+    UI.clear(); UI.speaker('WHO ARE YOU?','sys');
+    UI.add('The apocalypse files everyone to one sharp edge.'+(Game._daily?' <span class="small">[DAILY]</span>':''),'dim');
+    const opts=ARCHETYPES.map((a,i)=>{
+      const locked = a.unlock && !META.survivors.includes(a.id);
+      return { key:i+1, disabled:locked,
+        label:'<b>'+a.name+'</b> '+(locked?'<span class="small">🔒 unlock in the Garage</span>':'')+'<br><span class="small">'+a.blurb+' · '+a.perkText+'</span>',
+        fn:()=>{ Game._arch=a.id; Game.pickVehicle(); } };
+    });
+    opts.push({ key:'↩', label:'Back', fn:()=>Game.title() });
+    UI.setChoices(opts);
   },
-
-  async arrive(id){
-    S.loc = id;
-    const r = WORLD.regions[id];
-    if(!S.visited.includes(id)) S.visited.push(id);
-    if(!S.discovered.includes(id)) S.discovered.push(id);
-    r.links.forEach(n=>{ if(!S.discovered.includes(n)) S.discovered.push(n); });
+  pickVehicle(){
+    UI.clear(); UI.speaker('YOUR RIDE','sys');
+    UI.add('Pick the heap you\'ll bleed for.','dim');
+    const opts=STARTER_VEHICLES.map((v,i)=>{
+      const locked = v.unlock && !META.vehicles.includes(v.id);
+      return { key:i+1, disabled:locked,
+        label:'<b>'+v.name+'</b> '+(locked?'<span class="small">🔒</span>':'')+'<br><span class="small">'+v.blurb+'</span>',
+        fn:()=>Game.startRun(Game._arch, v.id) };
+    });
+    opts.push({ key:'↩', label:'Back', fn:()=>Game.pickSurvivor() });
+    UI.setChoices(opts);
+  },
+  async startRun(arch, veh){
+    RNG = Game._daily ? mulberry32(Game._seed) : Math.random;
+    S = freshState(arch, veh);
+    // meta start-perks
+    if(META.perks.includes('p_medkit')){ S.inv.medkits++; S.surv.maxHp+=8; S.surv.hp+=8; }
+    if(META.perks.includes('p_scrap')) S.scrap+=25;
+    if(META.perks.includes('p_lead')) S.lead+=2;
+    // archetype start-perks
+    if(S.surv.perk==='berserk_start') S.surv.flags.berserk=true;
+    if(arch==='scrapper') S.scrap+=15;
+    if(META.perks.includes('p_relic')) Game.gainRelic(pick(RELICS).id);
     save(); UI.hud();
-    if(id==='pier' && !S.endless) return Game.finale();
-    UI.clear();
-    const art = r.type==='settlement' ? 'camp' : r.type==='wild' ? 'skull' : r.type==='goal' ? 'sun' : 'road';
-    UI.art(art, r.type==='settlement' ? 'amber' : '');
-    UI.speaker('ARRIVED · '+r.name.toUpperCase(),'sys');
-    if(r.firstVisit && !S.seenBeats.includes('fv_'+id)){
-      S.seenBeats.push('fv_'+id);
-      for(const ln of r.firstVisit){ await UI.type(ln); }
-      save();
-    } else {
-      await UI.type(pick(['You roll into '+r.name+'.','The '+S.veh.name+' rumbles to a stop in '+r.name+'.','You\'ve reached '+r.name+'.']),'dim');
-    }
-    UI.tapToContinue(()=>Game.worldMap());
+    UI.clear(); UI.art('car','blue');
+    await UI.type('You drop into the <b>'+S.veh.name+'</b>, fire it up, and put the dead in your mirrors.');
+    if(Game._daily) await UI.type('<span class="small">DAILY — seed '+Game._seed+'. The same road for everyone today.</span>','warn');
+    Game.actIntro();
+  },
+  async actIntro(){
+    const act = ACTS[(S.act-1)%ACTS.length];
+    UI.clear(); UI.art('road');
+    UI.speaker('ACT '+S.act+' · '+act.name,'sys');
+    await UI.type('<span class="small">'+act.sub+'</span>');
+    await UI.type('The horde is '+S.lead+' stages back and gaining. Don\'t stop moving for long.');
+    Game.genChoices();
+    UI.tapToContinue(()=>Game.routeMap());
   },
 
-  async stranded(){
-    Game._travel = null;
-    UI.clear(); UI.art('carWreck','red'); UI.speaker('STRANDED','enemy');
-    await UI.type('The engine sputters, coughs, and dies. Out of fuel, in the open, miles from anywhere.');
-    if(S.inv.fuelcans>0){
-      S.inv.fuelcans--; S.fuel += 30; UI.hud();
-      await UI.type('You crack your last fuel can into the tank. It\'ll have to be enough.');
-      UI.tapToContinue(()=>Game.worldMap('You limp back to safe ground to regroup.'));
-    } else {
-      await UI.type('You search the nearest wrecks on foot, sucking fumes from cold fuel lines...');
-      if(chance(72)){ const f=8+rnd(14); S.fuel += f; UI.hud(); UI.toast('+'+f+' fuel','blue');
-        await UI.type('A few precious litres. Enough to crawl on. <span class="small">+'+f+' fuel</span>','loot');
-        UI.tapToContinue(()=>Game.worldMap('You nurse the car back to the last waypoint.')); }
-      else { await UI.type('Bone dry. Every tank. And the dead have all the time in the world — they come out of the grey, and they do not stop.','bad');
-        UI.tapToContinue(()=>Game.death()); }
-    }
+  /* ---- routing: after any node resolves ---- */
+  resume(msg){ if(!S || S.over) return; save(); return Game.afterNode(msg); },
+
+  afterNode(msg){
+    if(!S || S.over) return; save();
+    if(S._inBoss){ S._inBoss=false; return Game.actComplete(); }
+    if(S._pendingRelic){ S._pendingRelic=false; return Game.relicReward(()=>Game.advanceRoute()); }
+    return Game.advanceRoute(msg);
+  },
+  advanceRoute(msg){
+    if(!S || S.over) return;
+    if(S.lead<=0) return Game.hordeAssault();
+    Game.genChoices(); Game.routeMap(msg);
   },
 
-  async searchFuel(){
-    UI.clear(); UI.speaker('SEARCHING FOR FUEL','sys');
-    await UI.type('You crack fuel caps across a graveyard of cars, siphoning dregs and fumes.');
-    if(chance(70)){ const f=10+rnd(20); S.fuel=Math.min(S.veh.fuelMax,S.fuel+f); UI.hud(); UI.toast('+'+f+' fuel','blue');
-      await UI.type('Enough to keep moving. <span class="small">+'+f+' fuel</span>','loot'); }
-    else await UI.type('Bone dry. Whoever came before you was thorough.','dim');
-    if(chance(40)){ await UI.type('The noise draws them in.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
-    UI.tapToContinue(()=>Game.resume());
+  /* ---- the route map (main hub) ---- */
+  routeMap(msg){
+    if(!S || S.over) return;
+    save(); UI.clear(); UI.hud();
+    const act = ACTS[(S.act-1)%ACTS.length];
+    UI.artText(Game.renderRoute());
+    UI.speaker('ACT '+S.act+' · '+act.name,'sys');
+    const leadCol = S.lead<=1?'var(--red)':S.lead<=2?'var(--amber)':'var(--ink-dim)';
+    UI.add('<span class="small">stage '+Math.min(S.stage+1,ACT_LEN+1)+'/'+(ACT_LEN+1)+' &nbsp;·&nbsp; mutation tier '+Game.mutTier()+' &nbsp;·&nbsp; horde <span style="color:'+leadCol+'">'+Math.max(0,S.lead)+' behind</span></span>');
+    if(msg) UI.add(msg,'dim');
+    if(S.lead<=1) UI.add('⚠ The horde is on your bumper. Pick a fast path.','bad');
+    if(S.surv.hp < S.surv.maxHp*0.4) UI.add('✚ You\'re badly hurt — a Camp might be worth the time.','bad');
+    if(S.relics.length) UI.add('<span class="small">◈ '+S.relics.map(id=>relicById(id).name).join(' · ')+'</span>','loot');
+    UI.add('<span class="small">▸ where to next?</span>','warn');
+    const opts = (S.choices||[]).map((nd)=>{
+      const t=NODE_TYPES[nd.type]||{icon:'?',label:'?',desc:'',time:1};
+      return { key:t.icon, cls:(nd.type==='cache'||nd.type==='elite')?'pickup':(nd.type==='boss'?'danger':''),
+        label:'<b>'+(nd.title||t.label)+'</b> <span class="small">— '+(nd.desc||t.desc)+(t.time>1?' · slow (horde +1)':'')+'</span>',
+        fn:()=>Game.enterNode(nd) };
+    });
+    opts.push({ key:'✕', cls:'danger', label:'Save &amp; quit to title', fn:()=>{ save(); Game.title(); } });
+    UI.setChoices(opts);
+  },
+  renderRoute(){
+    const total=ACT_LEN+1; let road='';
+    for(let i=0;i<total;i++){ road += i<S.stage?'=': i===S.stage?'>': (i===total-1?'*':'.'); }
+    const lead=Math.max(0,S.lead);
+    return '  [you]'+road+'[COAST *]\n  horde '+'<'.repeat(Math.min(8,lead+1))+'  ('+lead+' stages back)';
+  },
+
+  /* ---- generate the next branching choices ---- */
+  genChoices(){
+    if(S.stage>=ACT_LEN){ const act=ACTS[(S.act-1)%ACTS.length]; S.choices=[{type:'boss',title:'BOSS · '+act.bossName,desc:'the only way through'}]; return; }
+    const pool=[]; const add=(t,w)=>{ for(let i=0;i<Math.max(0,w);i++) pool.push(t); };
+    add('fight',5); add('event',3); add('scav',3); add('garage',2); add('market',2);
+    add('camp', S.surv.hp<S.surv.maxHp*0.6?4:1);
+    add('elite', 1+Math.floor(S.stage/2));
+    add('cache', 1+Math.floor(((S.act-1)%ACTS.length)/2));
+    const types=[]; let guard=0;
+    while(types.length<3 && guard++<80){ const t=pick(pool); if(!types.includes(t)) types.push(t); }
+    while(types.length<2) types.push('fight');
+    S.choices=types.map(t=>{
+      const nd={type:t};
+      if(t==='market'){ nd.faction=ACTS[(S.act-1)%ACTS.length].faction; nd.title='Outpost · '+FACTION_INFO[nd.faction].name; }
+      return nd;
+    });
+  },
+
+  enterNode(nd){
+    if(!S || S.over) return;
+    S.node=nd;
+    const t=NODE_TYPES[nd.type]||{time:1};
+    let cost=t.time||1; if(S.relics.includes('lead_foot')) cost=Math.max(0,cost-1);
+    S.lead -= cost;
+    S.stage++;
+    S.miles += 3 + rnd(3);
+    S.nodeFaction = nd.faction || ACTS[(S.act-1)%ACTS.length].faction;
+    S.danger = (S.act-1)*4 + S.stage + Math.max(0, 4 - S.lead) + (S.endless?4:0);
+    save();
+    switch(nd.type){
+      case 'fight':  return Game.combat(false);
+      case 'elite':  S._pendingRelic=true; return Game.combat(false,{elite:true});
+      case 'boss':   S._inBoss=true; return Game.bossFight();
+      case 'scav':   return Game.scavenge();
+      case 'garage': return Game.garage();
+      case 'market': return Game.market();
+      case 'camp':   return Game.rest();
+      case 'event':  return Game.roadEvent();
+      case 'cache':  return Game.relicCache();
+      default:       return Game.combat(false);
+    }
+  },
+  async bossFight(){
+    const act=ACTS[(S.act-1)%ACTS.length];
+    UI.clear(); UI.art('horde','red'); UI.speaker('BOSS · '+act.bossName,'enemy');
+    await UI.type(act.bossLine);
+    UI.tapToContinue(()=>Game.combat(true,{boss:true}));
+  },
+
+  /* ---- the horde catches you ---- */
+  async hordeAssault(){
+    UI.clear(); UI.art('horde','red'); UI.speaker('THE HORDE CATCHES YOU','enemy');
+    await UI.type('The wave crashes over the road. No more running — carve a hole and punch through, or be buried here.');
+    UI.tapToContinue(()=>Game.combat(true,{assault:true}));
+  },
+
+  /* ---- act cleared (boss down) ---- */
+  async actComplete(){
+    UI.clear(); UI.art('sun','amber'); UI.speaker('ACT '+S.act+' CLEARED','sys');
+    await UI.type('The boss falls. The road ahead opens, and for a moment the dead are far behind.','good');
+    Game.relicReward(()=>{
+      if(S.act>=ACTS.length) return Game.runWin();
+      S.act++; S.stage=0; S.lead=5 + (META.perks.includes('p_lead')?2:0);
+      Game.actIntro();
+    });
+  },
+
+  /* ---- relics ---- */
+  relicReward(then){
+    const bag=RELICS.filter(r=>!S.relics.includes(r.id));
+    if(!bag.length){ UI.toast('All relics owned!'); const sc=15+rnd(15); S.scrap+=sc; UI.toast('+'+sc+' scrap','amber'); return then(); }
+    const offers=[]; while(offers.length<3 && bag.length) offers.push(bag.splice(rnd(bag.length),1)[0]);
+    UI.clear(); UI.art('sun','amber'); UI.speaker('◈ A RELIC','sys');
+    UI.add('Something rare glints in the wreckage. Bolt one to your legend:','good');
+    UI.setChoices(offers.map((r,i)=>({ key:i+1, cls:'pickup',
+      label:'<b>'+r.name+'</b><br><span class="small">'+r.desc+'</span>',
+      fn:()=>{ Game.gainRelic(r.id); then(); } })));
+  },
+  gainRelic(id){
+    if(!S.relics.includes(id)){ S.relics.push(id); S.run.relics++; const r=relicById(id); if(r&&r.onGain)r.onGain(S); UI.toast('◈ '+r.name,'amber'); UI.hud(); save(); }
+  },
+  async relicCache(){
+    UI.clear(); UI.art('garage','amber'); UI.speaker('SEALED CACHE','sys');
+    await UI.type('A reinforced case in a wreck, somehow untouched. Inside — something rare.');
+    Game.relicReward(()=>{ const sc=8+rnd(10)+(S.relics.includes('hoarder')?8:0); S.scrap+=sc; UI.toast('+'+sc+' scrap','amber'); Game.afterNode(); });
+  },
+
+  /* ---- run end ---- */
+  async runWin(){
+    S.endless=true; clearSave();
+    UI.clear(); UI.art('sun','amber'); UI.speaker('THE RED DAWN','sys');
+    await UI.type('You smash through the last of them onto the pier. Hands haul you aboard, the boat pulls away, and the engine carries you out toward a red, impossible dawn.','good');
+    await UI.type('You reached the coast. But the dead keep learning — and every shore has its own.','dim');
+    Game.runEnd(true);
+  },
+  runEnd(escaped){
+    loadMeta();
+    const sc = S.run.kills*2 + S.run.elites*15 + S.run.bosses*40 + (S.act-1)*60 + S.run.relics*12 + Math.floor(S.miles) + (escaped?500:0) + Game.mutTier()*8;
+    S.run.score=sc;
+    const payout = Math.floor(sc/6) + S.run.bosses*5 + (escaped?40:0);
+    META.salvage += payout; META.runs++; if(escaped) META.escapes++;
+    const best = sc>META.bestScore; META.bestScore=Math.max(META.bestScore,sc); META.deepestAct=Math.max(META.deepestAct,S.act);
+    saveMeta(); clearSave();
+    UI.clear(); UI.art(escaped?'sun':'skull', escaped?'amber':'red');
+    UI.speaker(escaped?'ESCAPED — RUN COMPLETE':'YOU DIED','sys');
+    UI.add('<b>'+S.surv.name+'</b> · reached Act '+S.act+' · Level '+S.surv.level,'dim');
+    UI.rule();
+    UI.add('Kills <b>'+S.run.kills+'</b> · Elites <b>'+S.run.elites+'</b> · Bosses <b>'+S.run.bosses+'</b> · Relics <b>'+S.run.relics+'</b> · Miles <b>'+S.miles+'</b>');
+    UI.add('SCORE <b style="color:var(--amber)">'+sc+'</b>'+(best?' &nbsp;<b style="color:var(--ink)">★ NEW BEST!</b>':' <span class="small">(best '+META.bestScore+')</span>'),'good');
+    UI.add('Salvage earned <b style="color:var(--amber)">+'+payout+' ⛭</b> <span class="small">(banked '+META.salvage+')</span>','loot');
+    const opts=[];
+    if(escaped) opts.push({ key:'∞', cls:'pickup', label:'<b>KEEP DRIVING</b> <span class="small">— endless, ever harder</span>',
+      fn:()=>{ S.over=false; S.endless=true; S.act++; S.stage=0; S.lead=5; S.run.score=0; save(); Game.actIntro(); } });
+    opts.push({ key:'▸', label:'<b>NEW RUN</b>', fn:()=>{ S=null; Game.newRun(false); } });
+    opts.push({ key:'⚒', label:'THE GARAGE <span class="small">— spend '+META.salvage+' salvage</span>', cls:'pickup', fn:()=>{ S=null; Game.metaHub(); } });
+    opts.push({ key:'✕', label:'Title', fn:()=>{ S=null; Game.title(); } });
+    UI.setChoices(opts);
   },
 
   /* ---- faction market (settlement shop) ---- */
   market(){
-    const r = WORLD.regions[S.loc];
+    const fac = S.nodeFaction || 'convoy';
+    const rel = factionRelation(fac);
     UI.clear(); UI.art('camp','amber');
-    UI.speaker(FACTIONS[r.faction].toUpperCase()+' MARKET','sys');
-    UI.add('Scrap on hand: <b>'+S.scrap+' ⛭</b>','dim');
+    UI.speaker((FACTION_INFO[fac]?FACTION_INFO[fac].name:'TRADERS').toUpperCase()+' OUTPOST','sys');
+    if(rel==='hostile'){ UI.add('They know your colours. The gate stays shut — nothing for you here.','bad'); UI.setChoices([{key:'▸',label:'Move on',fn:()=>Game.resume()}]); return; }
+    UI.add('Scrap on hand: <b>'+S.scrap+' ⛭</b>'+(rel==='ally'?' <span class="small">· ALLIED</span>':''),'dim');
     const havenAlly = S.ally==='haven';
     function item(name, desc, cost, fn, disabled){
       return { key:'⛭', cls:'pickup', cost:cost+' ⛭', disabled:disabled || S.scrap<cost,
         label:'<b>'+name+'</b><br><span class="small">'+desc+'</span>',
-        fn:()=>{ S.scrap-=cost; fn(); if(r.faction in FACTION_INFO) addRep(r.faction,1); UI.toast('Bought '+name,'amber'); save(); Game.market(); } };
+        fn:()=>{ S.scrap-=cost; fn(); if(fac in FACTION_INFO) addRep(fac,1); UI.toast('Bought '+name,'amber'); save(); Game.market(); } };
     }
     const opts=[];
     opts.push(item('Medkit ✚', havenAlly?'heal ~40% mid-fight · Haven price':'heal ~40% mid-fight', havenAlly?10:18, ()=>{ S.inv.medkits++; }));
-    opts.push(item('Fuel can ⛽','+30 fuel, stored for later',14,()=>{ S.inv.fuelcans++; }));
-    const topup = Math.max(1, Math.ceil((S.veh.fuelMax-S.fuel)/3));
-    opts.push(item('Top up the tank','fill fuel to max now',topup,()=>{ S.fuel=S.veh.fuelMax; }, S.fuel>=S.veh.fuelMax));
     const rc = Math.ceil((S.veh.maxInteg-S.veh.integ)/4);
     opts.push(item('Field repair','restore vehicle integrity to max',rc||1,()=>{ S.veh.integ=S.veh.maxInteg; }, S.veh.integ>=S.veh.maxInteg));
-    if(r.faction==='reaper') opts.push(item('Reaper blade','+4 survivor attack (permanent)',40,()=>{ S.surv.atk+=4; }));
-    if(r.faction==='haven')  opts.push(item('Hot meal &amp; a cot','heal fully now, +4 max HP',20,()=>{ S.surv.maxHp+=4; S.surv.hp=S.surv.maxHp; }));
-    if(r.faction==='convoy') opts.push(item('Convoy fuel cache','+2 fuel cans',22,()=>{ S.inv.fuelcans+=2; }));
-    opts.push({ key:'▸', label:'Leave the market', fn:()=>Game.worldMap() });
+    opts.push(item('Patch yourself up','restore HP to full',Math.ceil((S.surv.maxHp-S.surv.hp)/3)||1,()=>{ S.surv.hp=S.surv.maxHp; }, S.surv.hp>=S.surv.maxHp));
+    if(fac==='reaper') opts.push(item('Reaper blade','+4 survivor attack (permanent)',40,()=>{ S.surv.atk+=4; }));
+    if(fac==='haven')  opts.push(item('Hot meal &amp; a cot','heal fully now, +4 max HP',20,()=>{ S.surv.maxHp+=4; S.surv.hp=S.surv.maxHp; }));
+    if(fac==='convoy') opts.push(item('Engine tune','+2 vehicle ram (permanent)',24,()=>{ S.veh.ram+=2; }));
+    if(fac==='remnant')opts.push(item('Combat stim','+8 max HP, heal it',22,()=>{ S.surv.maxHp+=8; S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+8); }));
+    if(fac in FACTION_INFO){
+      opts.push({ key:'✦', cls:'pickup', label:'Take a job for '+FACTION_INFO[fac].name+' <span class="small">— +standing</span>', fn:()=>Game.factionJob(fac) });
+      if(S.ally!==fac && S.rep[fac] >= FACTION_INFO[fac].pledgeAt){
+        const defect=!!S.ally;
+        opts.push({ key:'⚑', cls:'danger', label:(defect?'Defect to ':'Pledge to ')+FACTION_INFO[fac].name+' <span class="small">'+(defect?'— betrays '+FACTION_INFO[S.ally].name:'— unlocks perks, angers rivals')+'</span>', fn:()=>Game.pledge(fac) });
+      }
+    }
+    opts.push({ key:'▸', label:'Hit the road', fn:()=>Game.resume() });
     UI.setChoices(opts);
   },
 
@@ -993,7 +1124,7 @@ const Game = {
     if(rivals.length) await UI.type(rivals.join(' and ')+' will treat you as an enemy now — gates closed, patrols hunting the roads.','warn');
     if(prev && prev!==f) await UI.type(FACTION_INFO[prev].name+' will not forget that you turned your coat.','bad');
     save();
-    UI.tapToContinue(()=>Game.worldMap());
+    UI.tapToContinue(()=>Game.market());
   },
 
   /* ---- a faction job: fight for standing ---- */
@@ -1005,7 +1136,7 @@ const Game = {
     await UI.type('Do it and there\'s scrap and standing in it for you.','dim');
     UI.setChoices([
       { key:1, cls:'danger', label:'Take the job <span class="small">— fight for it</span>', fn:()=>Game.combat(false,{quest:f}) },
-      { key:2, label:'Not now', fn:()=>Game.worldMap() },
+      { key:2, label:'Not now', fn:()=>Game.market() },
     ]);
   },
 
@@ -1117,13 +1248,14 @@ const Game = {
 
   /* ---- rest & repair (safe in settlements, risky in the wild) ---- */
   async rest(){
-    const safe = WORLD.regions[S.loc] && WORLD.regions[S.loc].type==='settlement';
+    // A deliberate Camp node is a defended stop; ambush only if the horde is close.
+    const safe = !(S.node && S.node.type!=='camp') ? true : false;
     UI.clear();
     UI.art('camp','amber');
-    UI.speaker(safe?'SAFE QUARTERS':'MAKESHIFT CAMP','sys');
+    UI.speaker(safe?'FORTIFIED CAMP':'MAKESHIFT CAMP','sys');
     await UI.type(safe
-      ? 'Behind walls and watch-fires, you finally let your guard down. Real rest, for once.'
-      : 'You find a defensible spot — a fenced lot, a collapsed overpass — and stop to patch yourself and the car.');
+      ? 'You pull off into a defensible spot, post the car across the gap, and finally let your guard down.'
+      : 'You find a rough spot and stop to patch yourself and the car.');
     const rate = safe?0.55:0.35;
     const heal = Math.round(S.surv.maxHp*rate);
     const fix = Math.round(S.veh.maxInteg*(safe?0.45:0.30));
@@ -1207,8 +1339,8 @@ const Game = {
   },
 
   /* ===================== COMBAT ===================== */
-  // The Mutation Clock: rises with distance (and hard in endless mode).
-  mutTier(){ return Math.min(8, Math.floor(S.miles/8) + (S.endless?3:0)); },
+  // The Mutation Clock: rises with act depth (and hard in endless mode).
+  mutTier(){ if(!S) return 0; return Math.min(9, (S.act-1)*2 + Math.floor(S.stage/2) + (S.endless?2:0)); },
 
   mkFoe(tpl, scale, bonusHp){
     const hp = Math.round(tpl.base.hp*scale) + (bonusHp||0) + (tpl.elite?40:0);
@@ -1232,16 +1364,21 @@ const Game = {
       Game._cb = { foes:pfoes, boss:false, turn:1, summonsLeft:0, bounty:pb, mt, scale, patrol:opts.patrol, human:true, quest:null };
       return Game.combatIntro();
     }
+    const isBoss = boss || opts.boss || opts.assault;
+    const eScale = scale * (opts.elite?1.5:1);
     const pool = ZOMBIES.filter(z=>!z.elite && z.tier<=mt);
-    const n = boss ? 3+rnd(3)+Math.floor(mt/3) : 1+rnd(Math.min(4,1+Math.floor(S.danger/2)));
+    const n = isBoss ? 3+rnd(3)+Math.floor(mt/3) : opts.elite ? 1+rnd(2) : 1+rnd(Math.min(4,1+Math.floor(S.danger/2)));
     // adaptation: the dead lean toward whatever counters your habits
     const ramHeavy   = S.tactics.ram   > S.tactics.melee + 3;
     const meleeHeavy = S.tactics.melee > S.tactics.ram   + 3;
     const foes=[]; const bounty={xp:0,scrap:0};
     for(let i=0;i<n;i++){
       let tpl;
-      if(boss && i===0){
-        tpl = (mt>=5 && chance(60)) ? ZOMBIES.find(z=>z.id==='tyrant') : ZOMBIES.find(z=>z.id==='brute');
+      if(isBoss && i===0){
+        tpl = (mt>=4 && chance(70)) ? ZOMBIES.find(z=>z.id==='tyrant') : ZOMBIES.find(z=>z.id==='brute');
+      } else if(opts.elite && i===0){
+        // an elite: a strong strain, beefed up
+        tpl = pick(ZOMBIES.filter(z=>!z.elite && z.tier<=Math.max(2,mt)));
       } else {
         const bag=[];
         pool.forEach(z=>{
@@ -1252,10 +1389,12 @@ const Game = {
         });
         tpl = bag.length ? pick(bag) : ZOMBIES[0];
       }
-      foes.push(Game.mkFoe(tpl, scale, boss?20:0));
-      bounty.xp += tpl.xp; bounty.scrap += tpl.scrap;
+      const f = Game.mkFoe(tpl, (opts.elite&&i===0)?eScale:scale, isBoss?20:0);
+      if(opts.elite && i===0){ f.elite=true; f.name='Elite '+f.name; f.hp=Math.round(f.hp*1.6); f.maxHp=f.hp; }
+      foes.push(f);
+      bounty.xp += tpl.xp * ((opts.elite&&i===0)?2:1); bounty.scrap += tpl.scrap * ((opts.elite&&i===0)?2:1);
     }
-    Game._cb = { foes, boss, turn:1, summonsLeft:3+mt, bounty, mt, scale, quest:opts.quest||null };
+    Game._cb = { foes, boss:isBoss, elite:!!opts.elite, assault:!!opts.assault, turn:1, summonsLeft:3+mt, bounty, mt, scale, quest:opts.quest||null };
     Game.combatIntro();
   },
 
@@ -1345,6 +1484,7 @@ const Game = {
     let crit=false;
     if(chance(S.surv.crit)){ dmg=Math.round(dmg*2); crit=true; }
     if(S.surv.flags.berserk && S.surv.hp < S.surv.maxHp/3) dmg=Math.round(dmg*1.6);
+    if(S.relics.includes('glass_cannon')) dmg=Math.round(dmg*1.6); // Glass Cannon
     return {dmg,crit};
   },
 
@@ -1359,7 +1499,8 @@ const Game = {
       return Game.afterPlayerAction();
     }
     const {dmg,crit}=Game.rollSurvDamage();
-    if(S.surv.flags.execute && f.hp <= f.maxHp*0.18){
+    const canExec = (S.surv.flags.execute && f.hp<=f.maxHp*0.18) || (S.relics.includes('reapers_favor') && !f.elite && f.hp<=f.maxHp*0.25);
+    if(canExec){
       f.hp=0;
       await UI.type('You drive your blade through its skull — <b>execution</b>. It drops instantly.','good');
     } else {
@@ -1374,13 +1515,15 @@ const Game = {
     const cb=Game._cb;
     S.tactics.ram++;
     let dmg = S.veh.ram + rnd(6) + (S.veh.flags.plow?S.veh.speed:0) + (S.ally==='reaper'?4:0);
+    if(S.relics.includes('glass_cannon')) dmg=Math.round(dmg*1.6);
     UI.clear();
     UI.speaker(S.veh.name,'');
     const f=cb.foes[0];
     f.hp-=dmg;
     await UI.type('You gun it and slam the '+f.name+' for <b>'+dmg+'</b>. Wet crunch of impact.','good');
     if(S.veh.flags.flamer){ cb.foes.forEach(z=>{ if(z!==f){ z.hp-=4+rnd(5); } }); await UI.type('Flame jets wash over the rest of the pack.','warn'); }
-    if(S.veh.flags.nitro && chance(25)){ const d2=Math.round(dmg*0.6); f.hp-=d2; await UI.type('NITRO kicks — a second impact for '+d2+'!','warn'); }
+    const nitroChance = (S.veh.flags.nitro?25:0) + (S.relics.includes('nitro_saint')?40:0);
+    if(nitroChance && chance(nitroChance)){ const d2=Math.round(dmg*0.6); f.hp-=d2; await UI.type('The ram strikes <b>twice</b> — another '+d2+'!','warn'); }
     const recoil=Math.max(0, 2+rnd(4) - Math.floor(S.veh.armor/2));
     if(recoil>0){ S.veh.integ=Math.max(0,S.veh.integ-recoil); await UI.type('The hit rattles your ride. <span class="small">−'+recoil+' integrity</span>','dim'); }
     Game.afterPlayerAction();
@@ -1414,7 +1557,12 @@ const Game = {
       }
     }
     const dead=cb.foes.filter(z=>z.hp<=0);
-    if(dead.length) UI.add(dead.map(z=>z.name).join(', ')+(dead.length>1?' go down.':' goes down.'),'dim');
+    if(dead.length){
+      UI.add(dead.map(z=>z.name).join(', ')+(dead.length>1?' go down.':' goes down.'),'dim');
+      S.run.kills += dead.length;
+      if(S.relics.includes('blood_engine')){ const h=dead.length*2; S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); }
+      if(S.relics.includes('vulture')){ S.scrap += dead.length*3; }
+    }
     cb.foes = cb.foes.filter(z=>z.hp>0);
   },
 
@@ -1461,7 +1609,9 @@ const Game = {
         const armor = f.pierce?0:S.veh.armor;
         const taken=Math.max(1,dmg-armor);
         S.veh.integ=Math.max(0,S.veh.integ-taken);
-        await UI.type('The '+f.name+' claws into the '+S.veh.name+'. <span class="small">−'+taken+' integrity</span>','bad');
+        let extra='';
+        if(S.relics.includes('razor_hull')){ f.hp-=4; extra=' The razor hull bites back — 4 to it.'; }
+        await UI.type('The '+f.name+' claws into the '+S.veh.name+'. <span class="small">−'+taken+' integrity</span>'+extra,'bad');
       } else {
         let def = S.surv.def + (S.surv.perk==='tough'?1:0);
         if(f.pierce) def=Math.floor(def/2);
@@ -1501,10 +1651,13 @@ const Game = {
   async victory(){
     const cb=Game._cb;
     if(S.surv.hp<=0 || S.veh.integ<=0) return Game.death(); // never "win" already dead
-    if(S._pierBoss){ S._pierBoss=false; return Game.win(); }
+    // run counters
+    if(cb.elite) S.run.elites++;
+    if(cb.boss && !cb.assault) S.run.bosses++;
+    if(cb.assault){ S.lead=Math.max(S.lead,3); }
     UI.clear();
-    UI.art('skull','dim');
-    UI.speaker('CLEARED','sys');
+    UI.art(cb.boss?'sun':'skull', cb.boss?'amber':'dim');
+    UI.speaker(cb.assault?'BROKE THROUGH':cb.boss?'BOSS DOWN':cb.elite?'ELITE SLAIN':'CLEARED','sys');
     // rewards scale with the bounty of everything that turned up (summons included)
     const bounty = cb.bounty || {xp:8,scrap:5};
     const xpMult = (1 + S.danger*0.05) * (S.ally==='remnant'?1.25:1); // Remnant study bonus
@@ -1556,23 +1709,24 @@ const Game = {
   },
 
   death(){
-    S.over=true; save();
-    UI.clear();
-    UI.art('carWreck','red');
-    UI.speaker('THE ROAD ENDS','enemy');
-    const survived=S.miles;
+    if(!S) return;
+    // Phoenix Cell relic — cheat death once per run.
+    if(S.relics.includes('phoenix') && !S._phoenixUsed){
+      S._phoenixUsed=true; S._inBoss=false; S._pendingRelic=false;
+      S.surv.hp=Math.max(1,Math.round(S.surv.maxHp*0.3));
+      S.veh.integ=Math.max(1,Math.round(S.veh.maxInteg*0.3));
+      UI.clear(); UI.art('sun','amber'); UI.speaker('PHOENIX CELL','sys');
+      UI.add('Your heart stops — then the cell jolts it back. You tear free of the swarm and live.','good');
+      UI.hud(); save();
+      UI.tapToContinue(()=>Game.advanceRoute('You broke away, barely.'));
+      return;
+    }
+    S.over=true;
+    UI.clear(); UI.art('carWreck','red'); UI.speaker('THE ROAD ENDS','enemy');
     UI.add(S.surv.hp<=0
       ? 'They drag you out through the broken window. You don\'t feel the last of it.'
       : 'The engine dies with a final cough, and the dead close over the '+S.veh.name+' like water.','bad');
-    UI.rule();
-    UI.add('<b>'+S.surv.name+'</b> made it <b>'+survived+' miles</b> · Level '+S.surv.level+'.','dim');
-    UI.add(survived>=80?'Far enough to see the sea. Far enough to matter.':survived>=40?'Further than most. Not far enough.':'The road is long and you were not.','dim');
-    UI.add('<span class="small">The dead keep what they take. But the road remembers.</span>');
-    wipe();
-    UI.setChoices([
-      { key:'▸', label:'DRIVE AGAIN <span class="small">— new survivor, new ride</span>', fn:()=>Game.intro() },
-      { key:'✕', label:'Back to title', fn:()=>Game.title() },
-    ]);
+    UI.tapToContinue(()=>Game.runEnd(false));
   },
 };
 
