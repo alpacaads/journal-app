@@ -1,1744 +1,961 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#0a0e0a">
-<meta name="description" content="DEAD MILES — a text-based zombie survival visual novel. Upgrade your survivor and your ride, endlessly.">
-<title>DEAD MILES // survival on the road</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0f">
+<title>ABYSSAL DOMAINS — a pocket roguelike</title>
 <style>
   :root{
-    --bg:#0a0e0a;
-    --bg2:#0f150f;
-    --ink:#9be88a;
-    --ink-dim:#4f7a47;
-    --amber:#e8b14a;
-    --red:#e0563f;
-    --blue:#5fb4d6;
-    --pink:#d678a8;
-    --line:#1e2a1c;
-    --glow:0 0 6px rgba(155,232,138,.35);
-    --mono:'Courier New',ui-monospace,Menlo,Consolas,monospace;
+    --bg:#0b0b0f; --panel:#15151d; --panel2:#1d1d27; --ink:#d8d2c2; --dim:#8a8576;
+    --wall:#5a5142; --floor:#3a3a46; --floorlit:#6b6b80; --gold:#e8b34a; --red:#e2553f;
+    --green:#7fc06a; --blue:#5aa9e6; --mag:#c07bd6; --cyan:#56c8c8; --white:#f2eede;
+    --hp:#d2433a; --mp:#3f74d8; --food:#c8a24a; --xp:#7a52c0;
   }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-  html,body{margin:0;padding:0;height:100%;background:var(--bg);}
-  body{
-    font-family:var(--mono);
-    color:var(--ink);
-    font-size:16px;
-    line-height:1.5;
-    overflow:hidden;
-    -webkit-font-smoothing:none;
-    user-select:none;
-  }
-  /* subtle scanline / crt vibe */
-  body::after{
-    content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
-    background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0,rgba(0,0,0,0) 2px,rgba(0,0,0,.18) 3px,rgba(0,0,0,0) 4px);
-    mix-blend-mode:multiply;opacity:.5;
-  }
-  #app{
-    display:flex;flex-direction:column;
-    height:100dvh;max-width:760px;margin:0 auto;
-    background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%);
-    position:relative;
-  }
-
-  /* ---------- HUD ---------- */
-  #hud{
-    display:flex;align-items:center;gap:8px;
-    padding:8px 10px;border-bottom:1px solid var(--line);
-    background:rgba(0,0,0,.25);font-size:12px;flex:0 0 auto;
-  }
-  #hud .title{color:var(--ink-dim);letter-spacing:2px;font-weight:bold;}
-  #hud .spacer{flex:1;}
-  .chip{color:var(--ink-dim);white-space:nowrap;}
-  .chip b{color:var(--ink);}
-  .chip.scrap b{color:var(--amber);}
-  .chip.fuel b{color:var(--blue);}
-  #statsBtn{
-    background:none;border:1px solid var(--line);color:var(--ink-dim);
-    font-family:var(--mono);font-size:12px;padding:4px 9px;border-radius:4px;cursor:pointer;
-  }
-  #statsBtn:active{background:var(--line);}
-
-  /* ---------- main scene ---------- */
-  #scene{
-    flex:1 1 auto;overflow-y:auto;padding:14px 16px 6px;
-    -webkit-overflow-scrolling:touch;scroll-behavior:smooth;
-  }
-  #scene::-webkit-scrollbar{width:0;}
-  .art{
-    white-space:pre;font-size:11px;line-height:1.15;color:var(--ink-dim);
-    text-shadow:var(--glow);margin:0 0 10px;overflow-x:auto;
-    display:block;
-  }
-  .art.amber{color:var(--amber);}
-  .art.red{color:var(--red);}
-  .art.blue{color:var(--blue);}
-  .speaker{color:var(--amber);font-weight:bold;letter-spacing:1px;font-size:13px;margin:10px 0 2px;}
-  .speaker.sys{color:var(--ink-dim);}
-  .speaker.enemy{color:var(--red);}
-  .narr{margin:0 0 4px;text-shadow:var(--glow);}
-  .narr.dim{color:var(--ink-dim);}
-  .narr.warn{color:var(--amber);}
-  .narr.bad{color:var(--red);}
-  .narr.good{color:var(--ink);}
-  .narr.loot{color:var(--blue);}
-  .rule{color:var(--line);margin:8px 0;user-select:none;}
-  .cursor::after{content:"\2588";animation:blink 1s steps(1) infinite;color:var(--ink);}
-  @keyframes blink{50%{opacity:0;}}
-
-  /* ---------- choices ---------- */
-  #choices{
-    flex:0 0 auto;padding:8px 12px calc(12px + env(safe-area-inset-bottom));
-    border-top:1px solid var(--line);background:rgba(0,0,0,.3);
-    display:flex;flex-direction:column;gap:7px;max-height:46vh;overflow-y:auto;
-  }
-  .choice{
-    display:block;width:100%;text-align:left;cursor:pointer;
-    font-family:var(--mono);font-size:15px;color:var(--ink);
-    background:rgba(155,232,138,.04);border:1px solid var(--line);
-    border-radius:6px;padding:12px 13px;line-height:1.35;
-    transition:background .08s,border-color .08s,transform .05s;
-  }
-  .choice:active{background:rgba(155,232,138,.14);transform:scale(.99);}
-  .choice .key{color:var(--ink-dim);margin-right:8px;}
-  .choice .cost{float:right;color:var(--amber);font-size:13px;}
-  .choice.disabled{opacity:.4;border-style:dashed;}
-  .choice.danger{border-color:#42201c;}
-  .choice.danger .key{color:var(--red);}
-  .choice.pickup{border-color:#1c2e3a;}
-  .choice.tap{
-    text-align:center;color:var(--ink-dim);border-style:dashed;
-    animation:pulse 1.4s ease-in-out infinite;
-  }
-  @keyframes pulse{50%{opacity:.55;}}
-
-  /* ---------- stats drawer ---------- */
-  #overlay{
-    position:absolute;inset:0;z-index:40;background:rgba(0,0,0,.55);
-    display:none;align-items:flex-end;
-  }
-  #overlay.open{display:flex;}
-  #drawer{
-    width:100%;max-height:88%;overflow-y:auto;
-    background:var(--bg2);border-top:2px solid var(--ink-dim);
-    border-radius:14px 14px 0 0;padding:14px 16px calc(20px + env(safe-area-inset-bottom));
-    animation:slideup .18s ease;
-  }
-  @keyframes slideup{from{transform:translateY(40px);opacity:.4;}to{transform:none;opacity:1;}}
-  #drawer h2{font-size:13px;letter-spacing:2px;color:var(--amber);margin:0 0 10px;display:flex;}
-  #drawer h2 .x{margin-left:auto;color:var(--ink-dim);cursor:pointer;padding:0 6px;}
-  .panel{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:12px;}
-  .panel .pt{color:var(--ink-dim);font-size:11px;letter-spacing:2px;margin-bottom:8px;}
-  .panel .pt b{color:var(--ink);}
-  .stat{display:flex;align-items:center;font-size:13px;margin:3px 0;gap:8px;}
-  .stat .nm{flex:0 0 96px;color:var(--ink-dim);}
-  .stat .vl{color:var(--ink);min-width:42px;}
-  .bar{flex:1;height:9px;background:#000;border:1px solid var(--line);border-radius:3px;overflow:hidden;}
-  .bar > i{display:block;height:100%;background:var(--ink);}
-  .bar.hp > i{background:var(--red);}
-  .bar.veh > i{background:var(--blue);}
-  .bar.xp > i{background:var(--amber);}
-  .modlist{font-size:12px;color:var(--ink-dim);line-height:1.6;}
-  .modlist b{color:var(--ink);}
-  .modlist .tag{color:var(--blue);}
-
-  /* ---------- toasts ---------- */
-  #toast{
-    position:absolute;left:50%;bottom:calc(48vh + 10px);transform:translateX(-50%);
-    z-index:60;display:flex;flex-direction:column;gap:6px;align-items:center;pointer-events:none;width:90%;
-  }
-  .toast{
-    background:rgba(0,0,0,.85);border:1px solid var(--ink-dim);border-radius:6px;
-    padding:6px 12px;font-size:13px;color:var(--ink);text-align:center;
-    animation:tin .25s ease, tout .4s ease 1.6s forwards;max-width:100%;
-  }
-  .toast.amber{border-color:var(--amber);color:var(--amber);}
-  .toast.red{border-color:var(--red);color:var(--red);}
-  .toast.blue{border-color:var(--blue);color:var(--blue);}
-  @keyframes tin{from{transform:translateY(8px);opacity:0;}}
-  @keyframes tout{to{opacity:0;transform:translateY(-8px);}}
-
-  .small{font-size:12px;color:var(--ink-dim);}
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    overscroll-behavior:none; touch-action:manipulation; -webkit-user-select:none; user-select:none;}
+  #app{display:flex;flex-direction:column;height:100%;max-width:560px;margin:0 auto;
+    padding:max(6px,env(safe-area-inset-top)) 6px max(6px,env(safe-area-inset-bottom));}
+  /* HUD */
+  #hud{flex:0 0 auto;font-size:12px;line-height:1.25;}
+  .hudrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .hudname{font-weight:bold;color:var(--white);}
+  .bar{position:relative;height:11px;border:1px solid #000;border-radius:3px;background:#000;flex:1 1 70px;min-width:64px;overflow:hidden;}
+  .bar>i{position:absolute;left:0;top:0;bottom:0;display:block;}
+  .bar>span{position:absolute;left:5px;top:-1px;font-size:10px;color:#fff;text-shadow:0 1px 1px #000;}
+  .pill{background:var(--panel2);border-radius:4px;padding:1px 6px;font-size:11px;color:var(--dim);}
+  .pill b{color:var(--ink);}
+  /* MAP */
+  #mapwrap{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0;margin:5px 0;}
+  #map{display:grid;line-height:1;letter-spacing:0;background:#000;border:1px solid #26262f;border-radius:6px;padding:2px;}
+  #map span{display:flex;align-items:center;justify-content:center;font-weight:bold;}
+  /* LOG */
+  #log{flex:0 0 auto;height:54px;overflow:hidden;font-size:12px;line-height:1.3;
+    background:var(--panel);border:1px solid #26262f;border-radius:6px;padding:4px 7px;display:flex;flex-direction:column-reverse;}
+  #log div{white-space:normal;}
+  .m-good{color:var(--green);} .m-bad{color:var(--red);} .m-warn{color:var(--gold);}
+  .m-sys{color:var(--blue);} .m-dim{color:var(--dim);}
+  /* CONTROLS */
+  #controls{flex:0 0 auto;display:flex;gap:8px;align-items:stretch;margin-top:6px;}
+  #pad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:5px;width:min(46vw,210px);aspect-ratio:1/1;}
+  #pad button{font-size:18px;}
+  #actcol{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:5px;}
+  button.btn{background:var(--panel2);color:var(--ink);border:1px solid #33333f;border-radius:9px;
+    font-family:inherit;font-weight:bold;font-size:13px;padding:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;min-height:38px;line-height:1.05;text-align:center;}
+  button.btn:active{background:#2b2b39;transform:translateY(1px);}
+  button.btn.center{background:#23232f;color:var(--gold);}
+  button.btn.wide{grid-column:span 2;}
+  button.btn[disabled]{opacity:.32;}
+  button.btn small{display:block;font-size:9px;color:var(--dim);font-weight:normal;}
+  /* OVERLAY SCREENS */
+  #screen{position:fixed;inset:0;background:rgba(7,7,11,.96);display:none;flex-direction:column;
+    z-index:20;padding:max(14px,env(safe-area-inset-top)) 16px max(14px,env(safe-area-inset-bottom));overflow:auto;}
+  #screen.show{display:flex;}
+  #screen .wrap{max-width:520px;width:100%;margin:auto;}
+  h1{font-size:26px;letter-spacing:2px;margin:.2em 0;color:var(--gold);text-align:center;}
+  h2{font-size:16px;color:var(--white);margin:.8em 0 .3em;letter-spacing:1px;}
+  .sub{text-align:center;color:var(--dim);font-size:12px;margin-bottom:10px;}
+  .opt{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid #2c2c38;border-radius:10px;
+    color:var(--ink);font-family:inherit;font-size:14px;padding:11px 13px;margin:7px 0;cursor:pointer;}
+  .opt:active{background:var(--panel2);}
+  .opt.sel{border-color:var(--gold);background:#23210f;}
+  .opt b{color:var(--white);} .opt .d{display:block;color:var(--dim);font-size:11.5px;margin-top:3px;line-height:1.35;}
+  .opt .tag{color:var(--gold);font-size:11px;}
+  .invitem{display:flex;justify-content:space-between;gap:8px;}
+  .invitem .q{color:var(--dim);font-size:11px;}
   .center{text-align:center;}
+  .big{font-size:15px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+  .statline{display:flex;justify-content:space-between;font-size:13px;padding:2px 0;border-bottom:1px solid #20202a;}
+  .glyphkey{font-size:12px;color:var(--dim);line-height:1.7;}
+  .glyphkey b{color:var(--ink);}
+  .hint{color:var(--dim);font-size:11px;text-align:center;margin-top:8px;}
+  a{color:var(--blue);}
 </style>
 </head>
 <body>
 <div id="app">
   <div id="hud">
-    <span class="title">DEAD&nbsp;MILES</span>
-    <span class="spacer"></span>
-    <span class="chip mi">ACT <b id="hudMiles">1</b></span>
-    <span class="chip scrap">⛭ <b id="hudScrap">0</b></span>
-    <span class="chip fuel">HORDE <b id="hudFuel">0</b></span>
-    <button id="statsBtn" onclick="UI.openDrawer()">STATUS</button>
+    <div class="hudrow">
+      <span class="hudname" id="hName">—</span>
+      <span class="pill">DLvl <b id="hDepth">1</b></span>
+      <span class="pill">CLvl <b id="hClvl">1</b></span>
+      <span class="pill">$<b id="hGold">0</b></span>
+    </div>
+    <div class="hudrow" style="margin-top:3px">
+      <div class="bar"><i id="hpBar" style="background:var(--hp);width:100%"></i><span id="hpTxt">HP</span></div>
+      <div class="bar"><i id="mpBar" style="background:var(--mp);width:100%"></i><span id="mpTxt">MP</span></div>
+    </div>
+    <div class="hudrow" style="margin-top:3px">
+      <div class="bar"><i id="xpBar" style="background:var(--xp);width:0%"></i><span id="xpTxt">XP</span></div>
+      <div class="bar"><i id="foodBar" style="background:var(--food);width:100%"></i><span id="foodTxt">Food</span></div>
+    </div>
   </div>
 
-  <div id="scene" onclick="UI.sceneTap()"></div>
+  <div id="mapwrap"><div id="map"></div></div>
 
-  <div id="choices"></div>
+  <div id="log"></div>
 
-  <div id="toast"></div>
-
-  <div id="overlay" onclick="if(event.target.id==='overlay')UI.closeDrawer()">
-    <div id="drawer"></div>
+  <div id="controls">
+    <div id="pad">
+      <button class="btn" data-cmd="ul">↖</button>
+      <button class="btn" data-cmd="u">↑</button>
+      <button class="btn" data-cmd="ur">↗</button>
+      <button class="btn" data-cmd="l">←</button>
+      <button class="btn center" data-cmd="center" id="centerBtn">·<small id="centerLbl">wait</small></button>
+      <button class="btn" data-cmd="r">→</button>
+      <button class="btn" data-cmd="dl">↙</button>
+      <button class="btn" data-cmd="d">↓</button>
+      <button class="btn" data-cmd="dr">↘</button>
+    </div>
+    <div id="actcol">
+      <button class="btn" data-cmd="inv">Items<small>i</small></button>
+      <button class="btn" data-cmd="cast" id="castBtn">Cast<small>z</small></button>
+      <button class="btn" data-cmd="rest">Rest<small>R</small></button>
+      <button class="btn" data-cmd="stairs" id="stairBtn">Stairs<small>&gt;</small></button>
+      <button class="btn wide" data-cmd="char">Character<small>tap for stats &amp; help</small></button>
+    </div>
   </div>
 </div>
 
+<div id="screen"><div class="wrap" id="screenBody"></div></div>
+
 <script>
 "use strict";
-/* =========================================================================
-   DEAD MILES — a text-based zombie survival visual novel
-   Single-file. Two progression cores: the SURVIVOR and the VEHICLE.
-   Both start as junk and upgrade endlessly (roguelike + procedural).
-   ========================================================================= */
+/* ============================================================ ABYSSAL DOMAINS
+   A compact, phone-first dungeon roguelike inspired by Ancient Domains of Mystery.
+   Descend the dungeon, fight, loot, level up. Permadeath. Reach the Sanctum,
+   slay its guardian, and claim the Orb of the Ancients.
+============================================================================= */
 
-/* ----------------------------- ASCII ART ------------------------------- */
-const ART = {
-  logo:
-`  ____  _____ ____  ____    __  __ ___ _     _____ ____
- |  _ \\| ____|  _ \\|  _ \\  |  \\/  |_ _| |   | ____/ ___|
- | | | |  _| | |_) | | | | | |\\/| || || |   |  _| \\___ \\
- | |_| | |___|  _ <| |_| | | |  | || || |___| |___ ___) |
- |____/|_____|_| \\_\\____/  |_|  |_|___|_____|_____|____/`,
-  road:
-`        \\        |        /
-   . ' .  \\   .  |  .   /  . ' .
-  ___________________________________
- /                                   \\
-/__________________  ________________ \\
-       |||      ||| || |||      |||
-=======================================`,
-  car:
-`        ______________
-   ____/   |  []  |    \\___
-  /_o_______________________o_\\
-  [|  REVENANT  ::  ::  ::    |]
-  \\__(O)__________________(O)__/`,
-  carWreck:
-`        ___..._______
-   ___ /   x  []      \\__
-  /_o__\\___~~~~~_________o\\
-  [| ##  rust  ##  ##     |]
-  \\__(o)____________(O)___/`,
-  walker:
-`     .-""-.
-    / .--. \\
-    | (oo)  |     ...rrhh...
-    |  ~~   |
-    '.____.'
-    /|    |\\
-   d || || b`,
-  runner:
-`    .-""-.       >>>
-   /  ><  \\    >>>
-   | \\__/ |  >>>
-   '.____.'>>>
-    /| /\\
-   / |/  \\`,
-  brute:
-`    ______
-   /  ||  \\      GRRROOAR
-  | (XX)(X)|
-  |  ====  |
-  /|  []  |\\
- / |______| \\
-/__|__|  |__|`,
-  horde:
-`  .o. .o. .o. .o. .o.
-  /|\\ /|\\ /|\\ /|\\ /|\\
-  o o o o o o o o o o
-  ...the dead come in waves...`,
-  garage:
-`  _________________________
- |  [GARAGE]  ___    ___    |
- |  =======  |o o|  |o o|   |
- |  tools // wrench // weld |
- |_________________________|`,
-  camp:
-`        (  )   (   )  )
-         ) (   )  (  (
-         ( )  (    ) )
-         _____________
-        /    SAFE     \\
-       /___ ZONE ______\\`,
-  skull:
-`     ___
-    /   \\
-   | x x |
-   |  ^  |
-    \\ - /
-     '-'`,
-  sun:
-`      \\ | /
-    '- (.) -'     a red dawn
-      / | \\`,
-  lurker:
-`    ___
-   (o.o)   ...hsss...
-    |=|    (crouched, waiting)
-   _/ \\_`,
-  screamer:
-`    .-.
-   (O O)    AAAIIIEEE!!
-    )^(    (((   )))
-   /| |\\   it calls the others`,
-  bloater:
-`    .-~~~-.
-   / () ()  \\   *gurgle*
-  ( ( bloat ) )
-   \\  ~~~~~  /  swollen with gas
-    '-._.-'`,
-  stalker:
-`   .  ,  .
-  . (>.<) .    ~flickers~
-   './  \\.'   now you don't`,
-  tyrant:
-`    _______
-   /## # ##\\    T Y R A N T
-  | (X) (X) |
-  |   vvv   |
- /| [#####] |\\
-==|_|     |_|==`,
-};
-
-/* ----------------------------- CONTENT --------------------------------- */
-
-const ARCHETYPES = [
-  { id:'drifter', name:'THE DRIFTER', blurb:'Quick, lucky, light on their feet.',
-    stats:{ maxHp:34, atk:5, def:2, agi:6, scav:1 }, perk:'lucky',
-    perkText:'Lucky — better scavenging & a free upgrade reroll.' },
-  { id:'soldier', name:'THE EX-SOLDIER', blurb:'Hits hard, takes hits harder.',
-    stats:{ maxHp:46, atk:7, def:4, agi:3, scav:0 }, perk:'tough',
-    perkText:'Hardened — takes 1 less damage from every hit.' },
-  { id:'mechanic', name:'THE MECHANIC', blurb:'Born in a garage. The ride loves them.',
-    stats:{ maxHp:38, atk:4, def:3, agi:4, scav:1 }, perk:'gearhead',
-    perkText:'Gearhead — vehicle mods 25% cheaper; sturdier ride.' },
-  { id:'brawler', name:'THE BRAWLER', blurb:'All muscle, no brakes.', unlock:35,
-    stats:{ maxHp:52, atk:9, def:3, agi:2, scav:0 }, perk:'berserk_start',
-    perkText:'Bloodlust — starts with the Berserker skill (+60% dmg when low).' },
-  { id:'scrapper', name:'THE SCRAPPER', blurb:'Finds treasure in every ruin.', unlock:35,
-    stats:{ maxHp:36, atk:5, def:2, agi:5, scav:3 }, perk:'lucky',
-    perkText:'Magpie — huge scavenging, starts with extra scrap.' },
-];
-
-const STARTER_VEHICLES = [
-  { id:'beater', name:'THE REVENANT', blurb:'A rusted sedan that refuses to die.',
-    stats:{ maxInteg:40, armor:2, ram:5, speed:4, fuelMax:60 } },
-  { id:'van', name:'OLD BESSIE', blurb:'A panel van. Slow, but it soaks hits.',
-    stats:{ maxInteg:55, armor:4, ram:4, speed:2, fuelMax:80 } },
-  { id:'moto', name:'THE WIDOW', blurb:'A stripped motorcycle. Fast and fragile.', unlock:30,
-    stats:{ maxInteg:24, armor:0, ram:3, speed:10, fuelMax:45 } },
-  { id:'muscle', name:'THE BLACK MASS', blurb:'A muscle car built to ram.', unlock:45,
-    stats:{ maxInteg:38, armor:1, ram:10, speed:7, fuelMax:55 } },
-  { id:'pickup', name:'THE MULE', blurb:'A pickup made for mounting guns.', unlock:40,
-    stats:{ maxInteg:50, armor:3, ram:6, speed:5, fuelMax:65 } },
-  { id:'bus', name:'THE ARK', blurb:'An armoured school bus. A fortress on wheels.', unlock:70,
-    stats:{ maxInteg:85, armor:6, ram:5, speed:2, fuelMax:100 } },
-  { id:'apc', name:'THE COFFIN', blurb:'A military APC. Nothing stops it.', unlock:100,
-    stats:{ maxInteg:72, armor:10, ram:9, speed:3, fuelMax:85 } },
-];
-
-// Relics — rare, build-defining passives found in caches, elites and bosses.
-const RELICS = [
-  { id:'blood_engine', name:'Blood Engine', desc:'Heal 2 HP for every enemy you kill.' },
-  { id:'vulture',      name:'Vulture Protocol', desc:'+3 scrap whenever an enemy dies.' },
-  { id:'nitro_saint',  name:'Nitro Saint', desc:'Every ram has a 40% chance to strike twice.' },
-  { id:'glass_cannon', name:'Glass Cannon', desc:'+60% damage dealt, but −30% max HP.', onGain:s=>{ s.veh.flags._glass=true; s.surv.maxHp=Math.max(8,Math.round(s.surv.maxHp*0.7)); s.surv.hp=Math.min(s.surv.hp,s.surv.maxHp); } },
-  { id:'hoarder',      name:"Hoarder's Map", desc:'+2 scavenging, and caches give more.', onGain:s=>{ s.surv.scav+=2; } },
-  { id:'lead_foot',    name:'Lead Foot', desc:'Start every stage 1 step further ahead of the horde.' },
-  { id:'razor_hull',   name:'Razor Hull', desc:'Attackers take 4 damage when they strike your vehicle.' },
-  { id:'reapers_favor',name:"Reaper's Favor", desc:'Instantly kill any non-elite under 25% HP.' },
-  { id:'overclock',    name:'Overclocked Core', desc:'+15% crit chance and +2 roof turret.', onGain:s=>{ s.surv.crit+=15; s.veh.turret+=2; } },
-  { id:'phoenix',      name:'Phoenix Cell', desc:'Once per run, cheat death and rise at 1 HP.' },
-  { id:'engine_saint', name:'Iron Lung', desc:'+20 max integrity and repair 8 after each fight.', onGain:s=>{ s.veh.maxInteg+=20; s.veh.integ+=20; s.veh.autorepair+=8; } },
-  { id:'adrenal',      name:'Adrenal Surge', desc:'+10% dodge and +2 agility.', onGain:s=>{ s.surv.dodge+=10; s.surv.agi+=2; } },
-];
-function relicById(id){ return RELICS.find(r=>r.id===id); }
-
-// Meta-progression: permanent unlocks bought with Salvage banked across runs.
-const META_STORE = [
-  { id:'moto',    type:'vehicle', cost:30, name:'Unlock: THE WIDOW',  desc:'Fast, fragile motorcycle.' },
-  { id:'pickup',  type:'vehicle', cost:40, name:'Unlock: THE MULE',   desc:'Pickup — weapon mounts.' },
-  { id:'muscle',  type:'vehicle', cost:45, name:'Unlock: THE BLACK MASS', desc:'Muscle car ram-cannon.' },
-  { id:'bus',     type:'vehicle', cost:70, name:'Unlock: THE ARK',    desc:'Armoured bus fortress.' },
-  { id:'apc',     type:'vehicle', cost:100,name:'Unlock: THE COFFIN', desc:'Unstoppable military APC.' },
-  { id:'brawler', type:'survivor',cost:35, name:'Unlock: THE BRAWLER',desc:'Heavy-hitting survivor.' },
-  { id:'scrapper',type:'survivor',cost:35, name:'Unlock: THE SCRAPPER',desc:'Loot-finding survivor.' },
-  { id:'p_medkit',type:'perk', cost:20, name:'Field Kit', desc:'Start every run with +1 medkit and +8 max HP.' },
-  { id:'p_scrap', type:'perk', cost:25, name:'Stockpile', desc:'Start every run with +25 scrap.' },
-  { id:'p_relic', type:'perk', cost:60, name:'Lucky Find', desc:'Start every run with a random relic already equipped.' },
-  { id:'p_lead',  type:'perk', cost:40, name:'Head Start', desc:'Begin each run 2 stages further ahead of the horde.' },
-];
-
-// Acts of a run — a forward push to the coast. Each ends in a boss.
-const ACTS = [
-  { name:'THE RUSTBELT',   sub:'choked highways, dead suburbs', faction:'convoy',
-    bossName:'THE CRUSHER',  bossLine:'A Brute the size of a truck drags itself across the road, and it has friends.' },
-  { name:'THE FLOODLANDS',  sub:'drowned farms under a low grey sky', faction:'reaper',
-    bossName:'THE BOG TYRANT', bossLine:'The water erupts — a Tyrant, swollen and vast, rises from the flood.' },
-  { name:'THE COAST',      sub:'salt-eaten ruins and the last boat', faction:'haven',
-    bossName:'THE HARBOUR HORDE', bossLine:'Every dead thing for miles has come to stop you reaching the pier.' },
-];
-const ACT_LEN = 5; // node choices before the act boss
-
-// Route node types and how to render them.
-const NODE_TYPES = {
-  fight:  { icon:'⚔', label:'Ambush',     desc:'a pack of the dead', time:1 },
-  elite:  { icon:'☠', label:'Elite',      desc:'a mutated horror — relic if you win', time:1 },
-  scav:   { icon:'⛭', label:'Scavenge',   desc:'loot, but it costs time', time:2 },
-  garage: { icon:'⚒', label:'Garage',     desc:'upgrade your ride', time:1 },
-  market: { icon:'⛁', label:'Outpost',    desc:'a faction market', time:1 },
-  camp:   { icon:'✚', label:'Camp',       desc:'rest &amp; repair (slow)', time:2 },
-  event:  { icon:'?', label:'Crossroads', desc:'an uncertain encounter', time:1 },
-  cache:  { icon:'◈', label:'Cache',      desc:'a relic, sealed in a wreck', time:2 },
-};
-
-// Survivor upgrade pool. repeatable:true means it can be offered again & stacks.
-const SURV_UPGRADES = [
-  { id:'iron_grip', name:'Iron Grip', desc:'+3 melee attack', rare:1, apply:s=>s.surv.atk+=3 },
-  { id:'thick_skin', name:'Thick Skin', desc:'+2 defense', rare:1, apply:s=>s.surv.def+=2 },
-  { id:'adrenaline', name:'Adrenaline', desc:'+12 max HP (and heal it)', rare:1, apply:s=>{s.surv.maxHp+=12;s.surv.hp+=12;} },
-  { id:'fleet', name:'Fleet Footed', desc:'+3 agility (turn order & fleeing)', rare:1, apply:s=>s.surv.agi+=3 },
-  { id:'scav_eye', name:"Scavenger's Eye", desc:'+1 scavenging (more loot)', rare:1, apply:s=>s.surv.scav+=1 },
-  { id:'crit', name:'Killer Instinct', desc:'+10% critical hit chance', rare:2, repeatable:true, apply:s=>s.surv.crit+=10 },
-  { id:'second_wind', name:'Second Wind', desc:'Heal 18% HP after each win', rare:2, apply:s=>s.surv.flags.secondWind=true },
-  { id:'berserk', name:'Berserker', desc:'+60% damage while below 1/3 HP', rare:2, apply:s=>s.surv.flags.berserk=true },
-  { id:'regen', name:'Iron Constitution', desc:'Regenerate 3 HP every combat turn', rare:2, repeatable:true, apply:s=>s.surv.regen+=3 },
-  { id:'medic', name:'Field Medic', desc:'+1 medkit now, and find them more often', rare:2, apply:s=>{s.surv.flags.medic=true;s.inv.medkits++;} },
-  { id:'lifesteal', name:'Savage', desc:'Heal for 20% of melee damage dealt', rare:3, apply:s=>s.surv.flags.lifesteal=true },
-  { id:'execute', name:'Headhunter', desc:'Instantly kill enemies under 18% HP', rare:3, apply:s=>s.surv.flags.execute=true },
-  { id:'dodge', name:'Sixth Sense', desc:'15% chance to dodge any attack entirely', rare:3, repeatable:true, apply:s=>s.surv.dodge+=15 },
-];
-
-// Vehicle upgrade pool.
-const VEH_UPGRADES = [
-  { id:'plating', name:'Reinforced Plating', desc:'+3 armor', rare:1, repeatable:true, apply:s=>s.veh.armor+=3 },
-  { id:'engine', name:'Tuned Engine', desc:'+3 speed', rare:1, repeatable:true, apply:s=>s.veh.speed+=3 },
-  { id:'ram', name:'Spiked Ram', desc:'+5 ram damage', rare:1, repeatable:true, apply:s=>s.veh.ram+=5 },
-  { id:'chassis', name:'Welded Chassis', desc:'+18 max integrity (and repair it)', rare:1, repeatable:true, apply:s=>{s.veh.maxInteg+=18;s.veh.integ+=18;} },
-  { id:'tank', name:'Auxiliary Fuel Tank', desc:'+25 max fuel (and top up)', rare:1, apply:s=>{s.veh.fuelMax+=25;s.fuel=Math.min(s.veh.fuelMax,s.fuel+25);} },
-  { id:'tires', name:'Off-Road Tires', desc:'Halves ambush chance on the road', rare:2, apply:s=>s.veh.flags.tires=true },
-  { id:'autorepair', name:'Repair Rig', desc:'Restore 12 integrity after each fight', rare:2, repeatable:true, apply:s=>s.veh.autorepair+=12 },
-  { id:'turret', name:'Roof Turret', desc:'Auto-fires for 6 dmg every combat turn', rare:2, repeatable:true, apply:s=>s.veh.turret+=6 },
-  { id:'nitro', name:'Nitrous Injection', desc:'25% chance of a bonus ram each turn', rare:2, apply:s=>s.veh.flags.nitro=true },
-  { id:'flamer', name:'Flame Jets', desc:'Ramming also burns the whole horde', rare:3, apply:s=>s.veh.flags.flamer=true },
-  { id:'plow', name:'The Grim Plow', desc:'Ram damage scales with your speed', rare:3, apply:s=>s.veh.flags.plow=true },
-  { id:'fortress', name:'Rolling Fortress', desc:'+30 max integrity, +5 armor', rare:3, apply:s=>{s.veh.maxInteg+=30;s.veh.integ+=30;s.veh.armor+=5;} },
-];
-
-// Strains unlock as the Mutation Clock climbs (tier). Each higher strain
-// brings a real combat mechanic, so the stakes escalate the further you go.
-const ZOMBIES = [
-  { id:'walker', name:'Walker', art:'walker', col:'',      tier:0, base:{hp:16,atk:5,agi:1},  xp:8,  scrap:4 },
-  { id:'runner', name:'Runner', art:'runner', col:'amber', tier:0, base:{hp:11,atk:7,agi:6},  xp:11, scrap:5 },
-  { id:'spitter',name:'Spitter',art:'bloater',col:'blue',  tier:1, base:{hp:18,atk:9,agi:3},  xp:16, scrap:8,  pierce:true,
-    telegraph:'SPITTER — its bile chews straight through armour. Your vehicle\'s plating won\'t save you from this one.' },
-  { id:'lurker', name:'Lurker', art:'lurker', col:'',      tier:1, base:{hp:14,atk:8,agi:5},  xp:15, scrap:7,  ambush:true,
-    telegraph:'LURKER — it was already waiting. Ambushers get a free strike before the fight even begins.' },
-  { id:'brute',  name:'Brute',  art:'brute',  col:'red',   tier:2, base:{hp:40,atk:11,agi:0}, xp:26, scrap:13,
-    telegraph:'BRUTE — a wall of dead muscle. Slow, but it soaks punishment and hits like a falling truck.' },
-  { id:'screamer',name:'Screamer',art:'screamer',col:'amber',tier:2,base:{hp:13,atk:4,agi:4},xp:22, scrap:11, summon:true,
-    telegraph:'SCREAMER — its shriek drags more dead out of the dark every moment it lives. Kill it FIRST.' },
-  { id:'stalker',name:'Stalker',art:'stalker', col:'blue', tier:3, base:{hp:16,atk:10,agi:8}, xp:24, scrap:12, evasion:40,
-    telegraph:'STALKER — it flickers at the edge of sight. Hard to land a blade on; ram it, or get lucky.' },
-  { id:'bloater',name:'Bloater',art:'bloater', col:'red',  tier:3, base:{hp:30,atk:6,agi:0},  xp:28, scrap:15, explode:14,
-    telegraph:'BLOATER — swollen with gas and rot. When it dies it ERUPTS. Don\'t be standing in melee range.' },
-  { id:'tyrant', name:'Tyrant', art:'tyrant',  col:'red',  tier:5, base:{hp:70,atk:16,agi:1}, xp:60, scrap:35, explode:10, elite:true,
-    telegraph:'TYRANT — an apex mutation. Everything the dead have learned, stacked into one towering body.' },
-];
-
-/* ---- THE OPEN WORLD: a map of regions you choose to drive between ---- */
-const FACTIONS = {
-  none:'no one', contested:'contested', convoy:'The Convoy',
-  haven:'Haven', reaper:'The Reapers', remnant:'The Remnant',
-};
-
-// Pledge to one faction for real perks — and turn its rivals against you.
-// Reaper is the high-risk choice: allying them makes everyone else hostile.
-const FACTION_INFO = {
-  convoy:{ name:'The Convoy', rivals:['reaper'], pledgeAt:25,
-    perk:'the road burns less fuel and a Convoy gun-truck rides shotgun in your fights',
-    soldier:{ id:'cv_e', name:'Convoy Enforcer', art:'lurker', col:'',     base:{hp:20,atk:9,agi:5},  xp:18, scrap:12 },
-    quest:'A Reaper scout pack is shadowing our route. Run them down before they bring the whole Junkyard on us.' },
-  haven:{ name:'Haven', rivals:['reaper'], pledgeAt:25,
-    perk:'rest is always safe, medkits run cheap, and Haven marksmen blunt the first blow each round',
-    soldier:{ id:'hv_g', name:'Haven Guard', art:'lurker', col:'amber',    base:{hp:24,atk:9,agi:3},  xp:18, scrap:12 },
-    quest:'Something\'s been picking off our outer farms at night. Clear it out and the walls open to you.' },
-  reaper:{ name:'The Reapers', rivals:['haven','convoy','remnant'], pledgeAt:25,
-    perk:'brutal Reaper gear (+attack, +ram) and a raider at your back — but every other faction wants you dead',
-    soldier:{ id:'rp_r', name:'Reaper Raider', art:'stalker', col:'red',    base:{hp:22,atk:11,agi:4}, xp:20, scrap:15, pierce:true },
-    quest:'Prove you\'re not soft. There\'s a herd we use for blood-sport — wade in and thin it.' },
-  remnant:{ name:'The Remnant', rivals:['reaper'], pledgeAt:25,
-    perk:'the dead are an open book to you, you gain extra XP, and their serums steady your hand',
-    soldier:{ id:'rm_s', name:'Remnant Sentinel', art:'lurker', col:'blue', base:{hp:20,atk:8,agi:3},  xp:18, scrap:12 },
-    quest:'We need a fresh strain sample from a live specimen. Engage one and let our drones observe.' },
-};
-
-// Symmetric: you are hostile to a faction if it rivals your ally, or your ally rivals it.
-function factionRelation(f){
-  if(!S || !S.ally) return 'neutral';
-  if(S.ally===f) return 'ally';
-  const a=FACTION_INFO[S.ally], b=FACTION_INFO[f];
-  if((a && a.rivals.includes(f)) || (b && b.rivals.includes(S.ally))) return 'hostile';
-  return 'neutral';
+/* --------------------------------- UTIL ---------------------------------- */
+const rnd  = (n)=>Math.floor(Math.random()*n);              // 0..n-1
+const rng  = (a,b)=>a+Math.floor(Math.random()*(b-a+1));     // a..b inclusive
+const pick = (a)=>a[rnd(a.length)];
+const chance=(p)=>Math.random()*100<p;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const sign =(n)=>n<0?-1:n>0?1:0;
+function roll(spec){ // "2d6"
+  const m=/(\d+)d(\d+)(?:\+(\d+))?/.exec(spec); if(!m) return parseInt(spec)||0;
+  let t=parseInt(m[3]||0); const n=+m[1],s=+m[2]; for(let i=0;i<n;i++)t+=rng(1,s); return t;
 }
-function addRep(f,n){ if(S && S.rep && (f in S.rep)) S.rep[f]=clamp(S.rep[f]+n,-100,100); }
-function standingLabel(v){ return v>=60?'Trusted':v>=25?'Friendly':v>=0?'Known':v>-30?'Wary':'Hated'; }
 
-const WORLD = {
-  start:'lot',
-  regions:{
-    lot:{ token:'A', name:'The Lot', type:'ruin', danger:1, faction:'none',
-      desc:'The dead dealership where you found the car. Picked over, but quiet.',
-      links:['rust','under'], services:['scavenge','garage','rest'] },
-    rust:{ token:'B', name:'Rustbelt Highway', type:'highway', danger:2, faction:'none',
-      desc:'Miles of seized traffic and rusting steel. Good salvage, bad sightlines.',
-      links:['lot','suburb','mall'], services:['scavenge'] },
-    suburb:{ token:'C', name:'Greyfield Suburbs', type:'ruin', danger:2, faction:'none',
-      desc:'Cul-de-sacs of broken homes. The dead still wander the lawns.',
-      links:['rust','junk'], services:['scavenge','rest'] },
-    under:{ token:'D', name:'The Underpass', type:'settlement', danger:2, faction:'convoy',
-      desc:'A nomad camp of welded trucks beneath a freeway. The Convoy runs it.',
-      links:['lot','junk','cross'], services:['market','garage','rest'],
-      firstVisit:[
-        'A woman in a fuel-stained jacket leans on your hood before you\'ve even stopped.',
-        '"Nice heap. The Convoy could use another driver." She raps the roof. "Parts, fuel, backup on the road — we look after our own. Think on it."'] },
-    mall:{ token:'E', name:'The Dead Mall', type:'ruin', danger:3, faction:'none',
-      desc:'A cathedral of consumption gone to rot. Rich pickings, thick crowds.',
-      links:['rust','haven','flood'], services:['scavenge'] },
-    haven:{ token:'F', name:'Haven', type:'settlement', danger:1, faction:'haven',
-      desc:'Walls, gardens, gun towers. The closest thing to "before". They trade fair.',
-      links:['mall','cross','lab'], services:['market','rest','garage'],
-      firstVisit:[
-        'Gun towers track you to the gate — then a green flag drops. Inside: children, gardens, the smell of actual bread.',
-        'A guard nods you through. "Haven trades fair and shoots straight. Don\'t make us do the second one."'] },
-    junk:{ token:'G', name:'Reaper Junkyard', type:'settlement', danger:3, faction:'reaper',
-      desc:'A fortress of scrap ruled by raiders. Dangerous to enter, deadly to cross.',
-      links:['suburb','under','cross'], services:['market','garage'],
-      firstVisit:[
-        'Spotlights pin the car. Chains rattle down from towers of crushed steel.',
-        'A voice booms, almost friendly: "Welcome to the Junkyard, fresh meat. The Reapers don\'t do charity — but we sell the best ways to kill. Browse. Or bleed."'] },
-    flood:{ token:'H', name:'The Floodplains', type:'wild', danger:4, faction:'none',
-      desc:'Drowned farmland under a low grey sky. Things move beneath the water.',
-      links:['mall','coast'], services:['scavenge'] },
-    cross:{ token:'I', name:'Greywater Cross', type:'crossroads', danger:3, faction:'contested',
-      desc:'Where every road meets — and every faction watches. Tense, contested ground.',
-      links:['under','haven','junk','lab'], services:['scavenge','rest'] },
-    coast:{ token:'J', name:'Coastal Ruins', type:'ruin', danger:4, faction:'none',
-      desc:'Salt-eaten resort towns. You can smell the sea from here. Real sea.',
-      links:['flood','lab','pier'], services:['scavenge'] },
-    lab:{ token:'L', name:'The Remnant Lab', type:'settlement', danger:3, faction:'remnant',
-      desc:'A half-buried research station. The Remnant still study the dead here.',
-      links:['cross','haven','coast','pier'], services:['intel','rest'],
-      firstVisit:[
-        'Blast doors grind open into sterile white. A masked scientist studies you like a specimen.',
-        '"You\'re still uninfected. Good. We\'re close — closer than anyone. The dead are changing, driver. We can tell you how. And we can tell you where the boat really is."'] },
-    pier:{ token:'K', name:'The Pier', type:'goal', danger:5, faction:'none',
-      desc:'The end of the road. Open water, and whatever waits between you and the boat.',
-      links:['coast','lab'], services:[] },
-  }
+/* --------------------------------- DATA ---------------------------------- */
+// attribute order: str dex tou wil per
+const RACES = [
+  { id:'human', name:'Human', mod:{str:1,dex:1,tou:1,wil:1,per:1}, hp:0, mp:0, light:0,
+    desc:'Balanced and adaptable. +10% experience.', xp:1.10, food:1 },
+  { id:'dwarf', name:'Dwarf', mod:{str:2,dex:-1,tou:3,wil:0,per:1}, hp:6, mp:-4, light:1,
+    desc:'Stout and tough. Sees further in the dark, heavy hitter.', xp:1, food:1 },
+  { id:'elf', name:'Dark Elf', mod:{str:-1,dex:3,tou:-1,wil:2,per:2}, hp:-2, mp:8, light:0,
+    desc:'Lithe and arcane. More mana, deadly accuracy.', xp:1, food:.9 },
+  { id:'troll', name:'Troll', mod:{str:5,dex:-2,tou:5,wil:-3,per:-1}, hp:14, mp:-8, light:0,
+    desc:'Enormous and regenerating, but slow to learn and always hungry.', xp:.8, food:2, regen:3 },
+  { id:'gnome', name:'Gnome', mod:{str:-2,dex:1,tou:0,wil:2,per:3}, hp:-2, mp:4, light:1,
+    desc:'Small and clever. Keen senses, finds more treasure.', xp:1, food:.8, find:1 },
+];
+
+const CLASSES = [
+  { id:'fighter', name:'Fighter', hpL:7, mpL:1, atk:2, crit:5, caster:false,
+    desc:'Master of arms. Most HP, hits hardest. No magic.',
+    start:{ weapon:'longsword', armor:'chainmail', items:['healing','healing','ration'] },
+    mod:{str:2,dex:1,tou:2,wil:0,per:0} },
+  { id:'wizard', name:'Wizard', hpL:4, mpL:6, atk:0, crit:5, caster:true,
+    desc:'Frail but commands fire and force. Starts with spells.',
+    spells:['magic_missile','heal','fireball'],
+    start:{ weapon:'dagger', armor:'robe', items:['mana','mana','ration','teleport'] },
+    mod:{str:-1,dex:1,tou:-1,wil:3,per:1} },
+  { id:'ranger', name:'Ranger', hpL:6, mpL:3, atk:1, crit:12, caster:true,
+    desc:'Balanced survivor. Sharp eyes, a little magic, lethal crits.',
+    spells:['magic_missile','light'],
+    start:{ weapon:'shortsword', armor:'leather', items:['healing','ration','ration'] },
+    mod:{str:1,dex:2,tou:1,wil:1,per:2} },
+  { id:'thief', name:'Thief', hpL:5, mpL:2, atk:1, crit:20, caster:false,
+    desc:'Strikes from the shadows. Huge crits, finds gold, wakes foes late.',
+    stealth:3, find:1,
+    start:{ weapon:'dagger', armor:'leather', items:['healing','teleport','ration'] },
+    mod:{str:0,dex:3,tou:0,wil:1,per:2} },
+];
+
+// glyph colors
+const COL={ '#':'var(--wall)','.':'var(--floor)','+':'var(--gold)','>':'var(--cyan)','<':'var(--cyan)',
+  '@':'var(--white)','$':'var(--gold)','!':'var(--red)','?':'var(--white)','/':'var(--cyan)','[':'var(--blue)',
+  '%':'var(--food)','*':'var(--mag)','=':'var(--gold)' };
+
+// Monsters. d = first depth it appears. spd: 'fast' acts twice, 'slow' every other.
+const MONSTERS = [
+  { id:'rat',     g:'r', c:'#b78', name:'giant rat',     d:1, hp:'1d4',  acc:8,  def:11, dmg:'1d3', xp:2,  spd:'norm' },
+  { id:'bat',     g:'b', c:'#a9c', name:'cave bat',      d:1, hp:'1d4',  acc:10, def:14, dmg:'1d3', xp:3,  spd:'fast', erratic:1 },
+  { id:'kobold',  g:'k', c:'#9b7', name:'kobold',        d:1, hp:'1d6',  acc:9,  def:12, dmg:'1d4', xp:3 },
+  { id:'snake',   g:'S', c:'#7c6', name:'cave snake',    d:2, hp:'1d6',  acc:11, def:13, dmg:'1d3', xp:5,  poison:2 },
+  { id:'jackal',  g:'j', c:'#c96', name:'jackal',        d:2, hp:'1d6',  acc:11, def:13, dmg:'1d4', xp:4,  spd:'fast' },
+  { id:'goblin',  g:'g', c:'#8c6', name:'goblin',        d:3, hp:'2d4',  acc:12, def:13, dmg:'1d6', xp:6 },
+  { id:'spider',  g:'s', c:'#caa', name:'giant spider',  d:3, hp:'1d8',  acc:13, def:15, dmg:'1d4', xp:7,  poison:3 },
+  { id:'orc',     g:'o', c:'#7a5', name:'orc',           d:4, hp:'2d6',  acc:13, def:13, dmg:'1d8', xp:9 },
+  { id:'zombie',  g:'z', c:'#9a9', name:'zombie',        d:4, hp:'2d8',  acc:11, def:10, dmg:'1d8', xp:8,  spd:'slow' },
+  { id:'gnoll',   g:'G', c:'#b85', name:'gnoll',         d:5, hp:'3d6',  acc:14, def:14, dmg:'1d10',xp:12 },
+  { id:'wolf',    g:'w', c:'#aaa', name:'dire wolf',     d:5, hp:'2d8',  acc:14, def:15, dmg:'1d8', xp:11, spd:'fast' },
+  { id:'ogre',    g:'O', c:'#c76', name:'ogre',          d:6, hp:'4d8',  acc:14, def:11, dmg:'2d6', xp:18, spd:'slow' },
+  { id:'skeleton',g:'Z', c:'#dda', name:'skeleton lord', d:6, hp:'3d8',  acc:15, def:15, dmg:'1d10',xp:16 },
+  { id:'wraith',  g:'W', c:'#aef', name:'wraith',        d:7, hp:'3d8',  acc:16, def:17, dmg:'2d6', xp:24, drain:1 },
+  { id:'troll_m', g:'T', c:'#5b5', name:'cave troll',    d:7, hp:'6d8',  acc:16, def:14, dmg:'2d8', xp:30, regen:2 },
+  { id:'vampire', g:'V', c:'#d6f', name:'vampire',       d:8, hp:'4d8',  acc:17, def:18, dmg:'2d6', xp:34, drain:1, spd:'fast' },
+  { id:'wyrmlet', g:'d', c:'#f96', name:'fire drake',    d:9, hp:'5d8',  acc:17, def:16, dmg:'2d8', xp:40, breath:'2d6' },
+  { id:'demon',   g:'&', c:'#f55', name:'lesser demon',  d:9, hp:'6d8',  acc:18, def:18, dmg:'3d6', xp:48 },
+  { id:'wyrm',    g:'D', c:'#fd5', name:'ANCIENT WYRM',  d:99,hp:'12d10',acc:20, def:19, dmg:'3d8', xp:300, breath:'4d6', boss:1, spd:'norm' },
+];
+
+const WEAPONS = {
+  dagger:    { name:'dagger',       g:'/', dmg:'1d4',  acc:1, val:5 },
+  shortsword:{ name:'short sword',  g:'/', dmg:'1d6',  acc:1, val:12 },
+  mace:      { name:'mace',         g:'/', dmg:'1d7',  acc:0, val:14 },
+  longsword: { name:'long sword',   g:'/', dmg:'1d8',  acc:1, val:22 },
+  battleaxe: { name:'battle axe',   g:'/', dmg:'2d4',  acc:0, val:26 },
+  warhammer: { name:'war hammer',   g:'/', dmg:'1d10', acc:-1,val:30 },
+  greatsword:{ name:'great sword',  g:'/', dmg:'2d6',  acc:0, val:40 },
+};
+const ARMORS = {
+  robe:     { name:'cloth robe',     g:'[', ac:0, val:3 },
+  leather:  { name:'leather armor',  g:'[', ac:2, val:10 },
+  studded:  { name:'studded leather',g:'[', ac:3, val:18 },
+  chainmail:{ name:'chain mail',     g:'[', ac:4, val:28 },
+  scale:    { name:'scale mail',     g:'[', ac:5, val:40 },
+  plate:    { name:'plate mail',     g:'[', ac:7, val:60 },
+};
+// consumables
+const POTIONS = {
+  healing:  { name:'potion of healing',        g:'!', kind:'potion', val:12, use:(p)=>{ const h=roll('3d6')+8; heal(h); msg('You feel much better. +'+h+' HP','good'); } },
+  greater:  { name:'potion of greater healing',g:'!', kind:'potion', val:30, use:(p)=>{ heal(999); msg('Warmth floods you — fully healed!','good'); } },
+  mana:     { name:'potion of mana',           g:'!', kind:'potion', val:14, use:(p)=>{ const m=roll('3d6')+6; S.p.mp=clamp(S.p.mp+m,0,S.p.maxmp); msg('Arcane energy surges. +'+m+' MP','sys'); } },
+  strength: { name:'potion of strength',       g:'!', kind:'potion', val:40, use:(p)=>{ S.p.attr.str++; recalc(); msg('You feel stronger! +1 STR','good'); } },
+  agility:  { name:'potion of agility',        g:'!', kind:'potion', val:40, use:(p)=>{ S.p.attr.dex++; recalc(); msg('You feel quicker! +1 DEX','good'); } },
+  life:     { name:'potion of life',           g:'!', kind:'potion', val:60, use:(p)=>{ S.p.attr.tou++; S.p.maxhp+=6; heal(6); recalc(); msg('Vitality blooms. +1 TOU, +6 max HP','good'); } },
+  exp:      { name:'potion of experience',     g:'!', kind:'potion', val:50, use:(p)=>{ gainXP(Math.floor(S.p.xpNext*0.45)); msg('Insight! Experience gained.','good'); } },
+  poison:   { name:'murky potion',             g:'!', kind:'potion', val:5,  bad:1, use:(p)=>{ S.p.poison=(S.p.poison||0)+6; msg('Ugh — that was poison!','bad'); } },
+};
+const SCROLLS = {
+  teleport: { name:'scroll of teleport',     g:'?', kind:'scroll', val:14, use:(p)=>{ teleport(); msg('Reality folds — you blink away.','sys'); } },
+  mapping:  { name:'scroll of magic mapping',g:'?', kind:'scroll', val:18, use:(p)=>{ revealMap(); msg('The dungeon imprints on your mind.','sys'); } },
+  enchant_w:{ name:'scroll of enchant weapon',g:'?',kind:'scroll', val:30, use:(p)=>{ if(S.p.weapon){S.p.weapon.ench=(S.p.weapon.ench||0)+1; msg('Your '+S.p.weapon.name+' glows sharper. (+'+S.p.weapon.ench+')','good');} else msg('You have no weapon to enchant.','dim'); } },
+  enchant_a:{ name:'scroll of enchant armor', g:'?',kind:'scroll', val:30, use:(p)=>{ if(S.p.armor){S.p.armor.ench=(S.p.armor.ench||0)+1; recalc(); msg('Your '+S.p.armor.name+' hardens. (+'+S.p.armor.ench+')','good');} else msg('You wear no armor.','dim'); } },
+  light:    { name:'scroll of light',        g:'?', kind:'scroll', val:8,  use:(p)=>{ litRoom(); msg('Light blossoms around you.','sys'); } },
+  fire:     { name:'scroll of flame',        g:'?', kind:'scroll', val:22, use:(p)=>{ scrollFlame(); } },
+};
+const FOODS = {
+  ration:{ name:'food ration', g:'%', kind:'food', val:6, sat:700, use:(p)=>{ S.p.food=clamp(S.p.food+700,0,S.p.foodMax); msg('You eat the ration. Satisfying.','dim'); } },
+  apple: { name:'apple',       g:'%', kind:'food', val:2, sat:250, use:(p)=>{ S.p.food=clamp(S.p.food+250,0,S.p.foodMax); msg('You munch an apple.','dim'); } },
+  corpse:{ name:'fresh corpse',g:'%', kind:'food', val:0, sat:200, use:(p)=>{ S.p.food=clamp(S.p.food+200,0,S.p.foodMax); if(chance(18)){S.p.poison=(S.p.poison||0)+4; msg('The corpse was tainted — you feel sick.','bad');} else msg('You eat the corpse. Grim, but filling.','dim'); } },
+};
+const SPELLS = {
+  magic_missile:{ name:'Magic Missile', cost:3,  desc:'Bolt of force at the nearest foe.', cast:()=>spellBolt('1d8',2,'force') },
+  fireball:     { name:'Fireball',      cost:10, desc:'Explosion centred on a distant foe.', cast:()=>spellFireball('3d6') },
+  heal:         { name:'Heal Wounds',   cost:6,  desc:'Mend your own wounds.', cast:()=>{ const h=roll('2d8')+6; heal(h); msg('You knit your wounds. +'+h+' HP','good'); return true; } },
+  light:        { name:'Light',         cost:2,  desc:'Illuminate your surroundings.', cast:()=>{ litRoom(); msg('Light floods the area.','sys'); return true; } },
+  teleport:     { name:'Blink',         cost:8,  desc:'Teleport to a random location.', cast:()=>{ teleport(); msg('You blink across the dungeon.','sys'); return true; } },
 };
 
-// Decorative ASCII world map. Each [X] token is stamped at render time.
-const MAP_TEMPLATE =
-`  ~ INLAND ~~~~~~~~~~~~~ THE COAST ~
-   [A]--[B]--[E]--[H]   ~  ~  ~  ~
-    |    |    |    |      the dead
-   [D]  [C]   |   [J]---------.  sea
-    |    |    |    |          |
-   [I]--[G]  [F]  [L]-------[K]
-                            pier`;
+const ITEM_DB = Object.assign({},
+  mapObj(WEAPONS,'weapon'), mapObj(ARMORS,'armor'),
+  POTIONS, SCROLLS, FOODS );
+function mapObj(src,kind){ const o={}; for(const k in src){ o[k]=Object.assign({kind},src[k]); } return o; }
 
+/* ------------------------------- CONSTANTS ------------------------------- */
+const MW=46, MH=30;          // internal map size
+let COLS=21, ROWS=15;        // viewport (computed for screen)
+const WIN_DEPTH=10;          // the Sanctum
+const HISCORE_KEY='abyssal_hi_v1';
+
+/* --------------------------------- STATE --------------------------------- */
+let S=null;
+function newState(){ return { p:null, depth:0, map:null, seen:null, vis:null, mons:[], items:[], up:null, down:null,
+  turn:0, over:false, won:false, log:[], orb:false, mode:'play' }; }
+
+/* ------------------------------ MAP GENERATION --------------------------- */
+function blankMap(){ const m=[]; for(let y=0;y<MH;y++){ m.push(new Array(MW).fill('#')); } return m; }
+function genLevel(depth){
+  const map=blankMap(); const rooms=[];
+  const tries=rng(9,13);
+  for(let t=0;t<tries;t++){
+    const w=rng(4,9), h=rng(3,6);
+    const x=rng(1,MW-w-2), y=rng(1,MH-h-2);
+    const r={x,y,w,h,cx:x+(w>>1),cy:y+(h>>1)};
+    let ok=true;
+    for(const o of rooms){ if(x<o.x+o.w+1 && x+w+1>o.x && y<o.y+o.h+1 && y+h+1>o.y){ok=false;break;} }
+    if(!ok) continue;
+    for(let yy=y;yy<y+h;yy++) for(let xx=x;xx<x+w;xx++) map[yy][xx]='.';
+    rooms.push(r);
+  }
+  // connect rooms in order
+  for(let i=1;i<rooms.length;i++){ carveCorridor(map, rooms[i-1], rooms[i]); }
+  // sometimes a few doors at room edges
+  // place stairs
+  const upRoom=rooms[0], downRoom=rooms[rooms.length-1];
+  const up={x:upRoom.cx,y:upRoom.cy}; map[up.y][up.x]='<';
+  let down=null;
+  if(depth<WIN_DEPTH){ down={x:downRoom.cx,y:downRoom.cy}; map[down.y][down.x]='>'; }
+  return {map,rooms,up,down};
+}
+function carveCorridor(map,a,b){
+  let x=a.cx,y=a.cy; const tx=b.cx,ty=b.cy;
+  const horizFirst=chance(50);
+  const stepX=()=>{ while(x!==tx){ x+=sign(tx-x); if(map[y][x]==='#')map[y][x]='.'; } };
+  const stepY=()=>{ while(y!==ty){ y+=sign(ty-y); if(map[y][x]==='#')map[y][x]='.'; } };
+  if(horizFirst){ stepX(); stepY(); } else { stepY(); stepX(); }
+}
+
+function buildLevel(depth, cameFromBelow){
+  const L=genLevel(depth);
+  S.map=L.map; S.up=L.up; S.down=L.down; S.depth=depth;
+  S.seen=[]; S.vis=[];
+  for(let y=0;y<MH;y++){ S.seen.push(new Array(MW).fill(false)); S.vis.push(new Array(MW).fill(false)); }
+  S.mons=[]; S.items=[];
+  // place player
+  const start = cameFromBelow ? L.down : L.up;
+  S.p.x=start.x; S.p.y=start.y;
+  // populate monsters
+  const pool=MONSTERS.filter(m=>!m.boss && m.d<=depth);
+  const count=rng(5,8)+Math.floor(depth*0.7);
+  for(let i=0;i<count;i++){
+    const cell=randFloor(true); if(!cell) break;
+    // bias toward higher-tier monsters as you descend
+    let m=pick(pool);
+    if(chance(40)){ const m2=pick(pool); if(m2.d>m.d) m=m2; }
+    spawnMonster(m,cell.x,cell.y);
+  }
+  // items
+  const ic=rng(2,4)+Math.floor(depth/3)+(classOf().find?classOf().find:0)+(raceOf().find?raceOf().find:0);
+  for(let i=0;i<ic;i++){ const cell=randFloor(true); if(!cell)break; dropItem(rollItem(depth),cell.x,cell.y); }
+  // gold piles
+  for(let i=0;i<rng(2,5);i++){ const cell=randFloor(true); if(!cell)break; S.items.push({x:cell.x,y:cell.y,gold:rng(3,12)+depth*2,g:'$'}); }
+  // The Sanctum: boss + orb
+  if(depth>=WIN_DEPTH){
+    const r=L.rooms[L.rooms.length-1];
+    const bx=clamp(r.cx,1,MW-2), by=clamp(r.cy,1,MH-2);
+    spawnMonster(MONSTERS.find(m=>m.id==='wyrm'), bx, by);
+    // orb near boss
+    let oc=randFloor(true)||{x:r.x+1,y:r.y+1};
+    S.items.push({x:oc.x,y:oc.y,orb:true,g:'*',name:'the Orb of the Ancients'});
+    msg('The air is thick with ancient power. The guardian stirs...','warn');
+  }
+  computeFOV();
+}
+function randFloor(empty){
+  for(let t=0;t<400;t++){ const x=rng(1,MW-2),y=rng(1,MH-2);
+    if(S.map[y][x]!=='.') continue;
+    if(x===S.p.x&&y===S.p.y) continue;
+    if(empty){ if(monAt(x,y)||itemAt(x,y)) continue; }
+    return {x,y};
+  } return null;
+}
+function rollItem(depth){
+  const r=rng(1,100);
+  if(r<=30){ // potion
+    const t=weightedPick([['healing',30],['mana',18],['greater',6],['strength',5],['agility',5],['life',4],['exp',6],['poison',10]]); return mkItem(t);
+  } else if(r<=52){ // scroll
+    const t=weightedPick([['teleport',18],['mapping',16],['enchant_w',12],['enchant_a',12],['light',14],['fire',10]]); return mkItem(t);
+  } else if(r<=66){ // food
+    return mkItem(weightedPick([['ration',60],['apple',40]]));
+  } else if(r<=84){ // weapon
+    const keys=Object.keys(WEAPONS); const idx=clamp(Math.floor(depth/2)+rng(0,2),0,keys.length-1); return mkItem(keys[idx]);
+  } else { // armor
+    const keys=Object.keys(ARMORS); const idx=clamp(Math.floor(depth/2.2)+rng(0,1),0,keys.length-1); return mkItem(keys[idx]);
+  }
+}
+function weightedPick(pairs){ let tot=0; pairs.forEach(p=>tot+=p[1]); let r=rng(1,tot); for(const p of pairs){ r-=p[1]; if(r<=0)return p[0]; } return pairs[0][0]; }
+function mkItem(id){ const base=ITEM_DB[id]; return Object.assign({id}, base); }
+function dropItem(it,x,y){ S.items.push(Object.assign({x,y,g:it.g||'?'},{item:it})); }
+
+/* ------------------------------- ENTITIES -------------------------------- */
+function spawnMonster(tpl,x,y){
+  const hp=roll(tpl.hp);
+  S.mons.push({ id:tpl.id, g:tpl.g, c:tpl.c, name:tpl.name, x, y, hp, maxhp:hp,
+    acc:tpl.acc, def:tpl.def, dmg:tpl.dmg, xp:tpl.xp, spd:tpl.spd||'norm',
+    poison:tpl.poison||0, drain:tpl.drain||0, regen:tpl.regen||0, breath:tpl.breath||null,
+    erratic:tpl.erratic||0, boss:tpl.boss||0, asleep:true, slowtick:false });
+}
+function monAt(x,y){ return S.mons.find(m=>m.x===x&&m.y===y); }
+function itemAt(x,y){ return S.items.find(it=>it.x===x&&it.y===y); }
+
+/* ------------------------------ PLAYER SETUP ----------------------------- */
+function raceOf(){ return RACES.find(r=>r.id===S.p.race); }
+function classOf(){ return CLASSES.find(c=>c.id===S.p.cls); }
+function createPlayer(raceId,clsId,name){
+  const R=RACES.find(r=>r.id===raceId), C=CLASSES.find(c=>c.id===clsId);
+  const attr={str:10,dex:10,tou:10,wil:10,per:10};
+  for(const k in attr){ attr[k]+=(R.mod[k]||0)+(C.mod[k]||0); }
+  const p={ name:name||C.name, race:raceId, cls:clsId, attr,
+    level:1, xp:0, xpNext:20, gold:0,
+    x:0,y:0, weapon:null, armor:null, inv:[], spells:(C.spells||[]).slice(),
+    food:1400, foodMax:1600, poison:0, regenTick:0, mpTick:0,
+    crit:C.crit, find:(C.find||0)+(R.find||0) };
+  S.p=p; recalc(); p.hp=p.maxhp; p.mp=p.maxmp;
+  // starting gear
+  const st=C.start;
+  if(st.weapon){ p.weapon=mkItem(st.weapon); }
+  if(st.armor){ p.armor=mkItem(st.armor); }
+  (st.items||[]).forEach(id=>addInv(mkItem(id)));
+  recalc();
+}
+function recalc(){
+  const p=S.p, R=raceOf(), C=classOf();
+  p.maxhp=Math.max(1, 14 + p.attr.tou*2 + (p.level-1)*C.hpL + (R.hp||0));
+  p.maxmp=Math.max(0, Math.floor((C.caster?p.attr.wil*1.6:p.attr.wil*0.5)) + (p.level-1)*C.mpL + (R.mp||0));
+  p.foodMax=1600;
+  p.light=4 + (R.light||0) + Math.floor((p.attr.per-10)/3);
+  p.acc = p.attr.dex + C.atk + Math.floor(p.level/2) + (p.weapon?(p.weapon.acc||0)+(p.weapon.ench||0):0);
+  p.ac  = 10 + Math.floor((p.attr.dex-10)/2) + (p.armor?(p.armor.ac||0)+(p.armor.ench||0):0) + Math.floor((p.attr.tou-10)/4);
+  p.hp=clamp(p.hp??p.maxhp,0,p.maxhp); p.mp=clamp(p.mp??p.maxmp,0,p.maxmp);
+}
+function dmgRoll(){ const p=S.p; const w=p.weapon; const base=w?roll(w.dmg)+(w.ench||0):rng(1,3); return base+Math.floor((p.attr.str-10)/2)+classOf().atk; }
+
+function addInv(it){
+  // stack consumables by id
+  if(it.kind!=='weapon'&&it.kind!=='armor'){
+    const ex=S.p.inv.find(x=>x.id===it.id && x.kind===it.kind && !x.ench);
+    if(ex){ ex.qty=(ex.qty||1)+1; return; }
+  }
+  it.qty=it.qty||1; S.p.inv.push(it);
+}
+
+/* --------------------------------- FOV ----------------------------------- */
+function blocks(x,y){ const t=S.map[y]&&S.map[y][x]; return t==='#'||t==='+'; }
+function computeFOV(){
+  for(let y=0;y<MH;y++) S.vis[y].fill(false);
+  const px=S.p.x,py=S.p.y,R=S.p.light;
+  S.vis[py][px]=true; S.seen[py][px]=true;
+  for(let y=py-R;y<=py+R;y++){ for(let x=px-R;x<=px+R;x++){
+    if(x<0||y<0||x>=MW||y>=MH) continue;
+    const dx=x-px,dy=y-py; if(dx*dx+dy*dy>R*R+R) continue;
+    if(los(px,py,x,y)){ S.vis[y][x]=true; S.seen[y][x]=true; }
+  }}
+}
+function los(x0,y0,x1,y1){
+  let dx=Math.abs(x1-x0),dy=Math.abs(y1-y0), sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx-dy, x=x0,y=y0;
+  while(true){
+    if(x===x1&&y===y1) return true;
+    if(!(x===x0&&y===y0)){ if(blocks(x,y)) return false; }
+    const e2=2*err; if(e2>-dy){err-=dy;x+=sx;} if(e2<dx){err+=dx;y+=sy;}
+  }
+}
+
+/* ------------------------------- ACTIONS --------------------------------- */
+const DIRS={ ul:[-1,-1],u:[0,-1],ur:[1,-1],l:[-1,0],r:[1,0],dl:[-1,1],d:[0,1],dr:[1,1] };
+function act(cmd){
+  if(S.over){ return; }
+  if(S.mode!=='play') return;
+  if(DIRS[cmd]){ const [dx,dy]=DIRS[cmd]; return playerMove(dx,dy); }
+  switch(cmd){
+    case 'center': return centerAction();
+    case 'rest':   return restCmd();
+    case 'stairs': return useStairs();
+    case 'inv':    return openInventory();
+    case 'cast':   return openCast();
+    case 'char':   return openChar();
+  }
+}
+function playerMove(dx,dy){
+  const nx=S.p.x+dx, ny=S.p.y+dy;
+  if(nx<0||ny<0||nx>=MW||ny>=MH) return;
+  const m=monAt(nx,ny);
+  if(m){ return playerAttack(m); }
+  const t=S.map[ny][nx];
+  if(t==='#'){ return; }
+  S.p.x=nx; S.p.y=ny;
+  // auto pickup gold; note items
+  const it=itemAt(nx,ny);
+  if(it){ if(it.gold){ S.p.gold+=it.gold; msg('You pick up '+it.gold+' gold.','warn'); S.items=S.items.filter(z=>z!==it); }
+    else if(it.orb){ grabOrb(it); }
+    else { msg('You see here: '+itemName(it.item)+'. ('+'·'+' to grab)','dim'); } }
+  endTurn();
+}
+function centerAction(){
+  const it=itemAt(S.p.x,S.p.y);
+  if(it && it.item){ pickupHere(it); return; }
+  if(it && it.orb){ grabOrb(it); return; }
+  const t=S.map[S.p.y][S.p.x];
+  if(t==='>'||t==='<'){ return useStairs(); }
+  // search/wait
+  msg('You wait.','dim'); endTurn();
+}
+function pickupHere(it){
+  addInv(it.item); msg('You pick up '+itemName(it.item)+'.','good'); S.items=S.items.filter(z=>z!==it); endTurn();
+}
+function grabOrb(it){
+  S.items=S.items.filter(z=>z!==it); S.orb=true;
+  msg('You seize the Orb of the Ancients! Its light is blinding.','warn');
+  victory();
+}
+function playerAttack(m){
+  m.asleep=false;
+  const hitC=clamp(55+(S.p.acc-m.def)*6,5,95);
+  if(!chance(hitC)){ msg('You miss the '+m.name+'.','dim'); return endTurn(); }
+  let dmg=dmgRoll(); let crit=false;
+  if(chance(S.p.crit)){ dmg=Math.floor(dmg*2); crit=true; }
+  m.hp-=dmg;
+  msg((crit?'CRITICAL! ':'')+'You hit the '+m.name+' for '+dmg+'.', crit?'good':'');
+  if(m.hp<=0){ killMonster(m); }
+  endTurn();
+}
+function killMonster(m){
+  msg('The '+m.name+' dies.', 'good');
+  S.mons=S.mons.filter(z=>z!==m);
+  if(chance(22)) dropItem(mkItem('corpse'),m.x,m.y);
+  if(m.boss){ msg('The ANCIENT WYRM collapses with a world-shaking roar!','warn'); }
+  gainXP(m.xp);
+}
+function gainXP(n){
+  const p=S.p; p.xp+=Math.round(n*raceOf().xp);
+  while(p.xp>=p.xpNext){ p.xp-=p.xpNext; p.level++; p.xpNext=Math.floor(p.xpNext*1.5+15);
+    const oldhp=p.maxhp,oldmp=p.maxmp; recalc(); p.hp+=Math.max(0,p.maxhp-oldhp); p.mp+=Math.max(0,p.maxmp-oldmp);
+    p.hp=p.maxhp; // full heal on level
+    if(p.level%3===0){ const k=pick(['str','dex','tou','wil','per']); p.attr[k]++; recalc(); msg('Level '+p.level+'! You grow more '+({str:'powerful',dex:'agile',tou:'hardy',wil:'attuned',per:'perceptive'})[k]+'. (+1 '+k.toUpperCase()+')','good'); }
+    else msg('Welcome to level '+p.level+'! You feel renewed.','good');
+  }
+}
+
+/* --------------------------------- STAIRS -------------------------------- */
+function useStairs(){
+  const t=S.map[S.p.y][S.p.x];
+  if(t==='>'){ buildLevel(S.depth+1,false); msg('You descend to dungeon level '+S.depth+'.','sys'); render(); }
+  else if(t==='<'){ if(S.depth<=1){ msg('You stand at the dungeon mouth. Only the depths await — there is no turning back without the Orb.','dim'); }
+    else { buildLevel(S.depth-1,true); msg('You climb to dungeon level '+S.depth+'.','sys'); render(); } }
+  else { msg('There are no stairs here.','dim'); }
+}
+
+/* --------------------------------- MAGIC --------------------------------- */
+function nearestVisibleMonster(){
+  let best=null,bd=1e9;
+  for(const m of S.mons){ if(!S.vis[m.y][m.x]) continue; const d=Math.abs(m.x-S.p.x)+Math.abs(m.y-S.p.y); if(d<bd){bd=d;best=m;} }
+  return best;
+}
+function spellBolt(dmgspec,critB,kind){
+  const m=nearestVisibleMonster(); if(!m){ msg('No target in sight.','dim'); return false; }
+  let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2); m.asleep=false; m.hp-=dmg;
+  msg('A bolt of '+kind+' strikes the '+m.name+' for '+dmg+'.','sys');
+  if(m.hp<=0) killMonster(m);
+  return true;
+}
+function spellFireball(dmgspec){
+  const m=nearestVisibleMonster(); if(!m){ msg('No target in sight.','dim'); return false; }
+  const cx=m.x,cy=m.y; let hit=0;
+  for(const z of S.mons.slice()){ if(Math.abs(z.x-cx)<=1&&Math.abs(z.y-cy)<=1){ let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2); z.asleep=false; z.hp-=dmg; hit++; if(z.hp<=0)killMonster(z);} }
+  // self damage if adjacent
+  if(Math.abs(S.p.x-cx)<=1&&Math.abs(S.p.y-cy)<=1){ const d=roll('1d6'); S.p.hp-=d; msg('The blast singes you for '+d+'!','bad'); }
+  msg('Fireball erupts! '+hit+' foe'+(hit===1?'':'s')+' caught in the flames.','sys');
+  return true;
+}
+function scrollFlame(){ if(spellFireball('2d6')) {} else msg('The scroll fizzles — no target.','dim'); }
+function teleport(){ const c=randFloor(false); if(c){ S.p.x=c.x; S.p.y=c.y; computeFOV(); } }
+function revealMap(){ for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){ if(S.map[y][x]!=='#'||hasFloorNeighbor(x,y)) S.seen[y][x]=true; } }
+function hasFloorNeighbor(x,y){ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=MW||ny>=MH)continue; if(S.map[ny][nx]!=='#')return true; } return false; }
+function litRoom(){ const R=Math.max(S.p.light,6); for(let y=S.p.y-R;y<=S.p.y+R;y++)for(let x=S.p.x-R;x<=S.p.x+R;x++){ if(x<0||y<0||x>=MW||y>=MH)continue; if(los(S.p.x,S.p.y,x,y)){S.seen[y][x]=true;} } }
+function heal(n){ S.p.hp=clamp(S.p.hp+n,0,S.p.maxhp); }
+
+/* --------------------------------- REST ---------------------------------- */
+function restCmd(){
+  if(nearestVisibleMonster()){ msg('Not while enemies are near!','bad'); return; }
+  if(S.p.hp>=S.p.maxhp && S.p.mp>=S.p.maxmp){ msg('You are already fully rested.','dim'); return; }
+  let n=0;
+  while(n<120 && (S.p.hp<S.p.maxhp||S.p.mp<S.p.maxmp)){ upkeep(); n++; if(nearestVisibleMonster())break; if(S.p.food<=0)break; }
+  msg('You rest for a while.','dim'); endTurn(true);
+}
+
+/* ------------------------------- TURN LOOP ------------------------------- */
+function endTurn(noMonsters){
+  if(S.over) return;
+  if(!noMonsters) monstersAct();
+  upkeep();
+  S.turn++;
+  if(S.p.hp<=0){ return death(); }
+  computeFOV(); render();
+}
+function upkeep(){
+  const p=S.p, R=raceOf();
+  // hunger
+  p.food-=Math.round(R.food*(p.level>8?1.3:1));
+  if(p.food<=0){ p.food=0; p.hp-=1; if(S.turn%3===0)msg('You are starving!','bad'); }
+  // poison
+  if(p.poison>0){ p.poison--; p.hp-=1; if(S.turn%2===0)msg('The poison burns. (-1 HP)','bad'); }
+  // regen
+  const regenRate=Math.max(4, 16-Math.floor(p.attr.tou/2)-(R.regen||0)*4);
+  if(p.hp<p.maxhp && p.food>0){ if(++p.regenTick>=regenRate){ p.regenTick=0; p.hp=clamp(p.hp+1,0,p.maxhp); } }
+  const mpRate=Math.max(3, 12-Math.floor(p.attr.wil/2));
+  if(p.mp<p.maxmp){ if(++p.mpTick>=mpRate){ p.mpTick=0; p.mp=clamp(p.mp+1,0,p.maxmp); } }
+}
+function monstersAct(){
+  for(const m of S.mons.slice()){
+    if(m.hp<=0) continue;
+    if(m.spd==='slow'){ m.slowtick=!m.slowtick; if(m.slowtick) continue; }
+    monsterStep(m);
+    if(m.spd==='fast' && m.hp>0 && !S.over) monsterStep(m);
+    if(S.over) return;
+  }
+}
+function monsterStep(m){
+  const p=S.p;
+  const dist=Math.max(Math.abs(m.x-p.x),Math.abs(m.y-p.y));
+  // waking
+  if(m.asleep){
+    const wake=m.boss?99:(m.id==='bat'?4:6) - (classOf().stealth||0);
+    if(dist<=Math.max(1,wake) && S.vis[m.y][m.x]) m.asleep=false; else { if(m.regen&&m.hp<m.maxhp)m.hp=clamp(m.hp+m.regen,0,m.maxhp); return; }
+  }
+  // regen for trolls etc.
+  if(m.regen && m.hp<m.maxhp) m.hp=clamp(m.hp+m.regen,0,m.maxhp);
+  // adjacent -> attack (or breath)
+  if(dist<=1){ return monsterAttack(m); }
+  // breath weapon at range if in LOS
+  if(m.breath && dist<=4 && los(m.x,m.y,p.x,p.y) && chance(35)){ return monsterBreath(m); }
+  // erratic movement (bats)
+  let dx,dy;
+  if(m.erratic && chance(45)){ dx=rng(-1,1); dy=rng(-1,1); }
+  else { dx=sign(p.x-m.x); dy=sign(p.y-m.y); }
+  tryMonMove(m,dx,dy);
+}
+function tryMonMove(m,dx,dy){
+  const opts=[[dx,dy],[dx,0],[0,dy]];
+  if(dx===0) opts.push([1,dy],[-1,dy]); if(dy===0) opts.push([dx,1],[dx,-1]);
+  for(const [ox,oy] of opts){ if(ox===0&&oy===0)continue;
+    const nx=m.x+ox,ny=m.y+oy;
+    if(nx<0||ny<0||nx>=MW||ny>=MH)continue;
+    if(S.map[ny][nx]==='#')continue;
+    if(nx===S.p.x&&ny===S.p.y){ return monsterAttack(m); }
+    if(monAt(nx,ny))continue;
+    m.x=nx;m.y=ny; return;
+  }
+}
+function monsterAttack(m){
+  const p=S.p;
+  const hitC=clamp(50+(m.acc-p.ac)*6,5,95);
+  if(!chance(hitC)){ if(S.vis[m.y][m.x])msg('The '+m.name+' misses you.','dim'); return; }
+  let dmg=roll(m.dmg);
+  p.hp-=dmg;
+  let extra='';
+  if(m.poison){ p.poison=(p.poison||0)+m.poison; extra=' You are poisoned!'; }
+  if(m.drain && chance(40)){ p.xp=Math.max(0,p.xp-m.drain*4); extra+=' It drains your vigour!'; }
+  msg('The '+m.name+' hits you for '+dmg+'.'+extra,'bad');
+  if(p.hp<=0){ death(); }
+}
+function monsterBreath(m){
+  const p=S.p; let dmg=roll(m.breath); p.hp-=dmg;
+  msg('The '+m.name+' breathes fire — '+dmg+' damage!','bad');
+  if(p.hp<=0) death();
+}
+
+/* ------------------------------- END STATES ------------------------------ */
+function death(){
+  if(S.over) return; S.over=true; S.p.hp=0;
+  const score=calcScore();
+  recordScore(score);
+  showGameOver(false,score);
+}
+function victory(){
+  if(S.over) return; S.over=true; S.won=true;
+  const score=calcScore()+1000;
+  recordScore(score);
+  showGameOver(true,score);
+}
+function calcScore(){ const p=S.p; return p.gold + p.level*100 + S.depth*150 + (S.won?1000:0); }
+function getHi(){ try{ return JSON.parse(localStorage.getItem(HISCORE_KEY))||{score:0,depth:0,won:false}; }catch(e){ return {score:0,depth:0,won:false}; } }
+function recordScore(score){ const hi=getHi(); if(score>hi.score){ try{ localStorage.setItem(HISCORE_KEY, JSON.stringify({score,depth:S.depth,won:S.won,name:classOf().name,date:Date.now()})); }catch(e){} } }
+
+/* ------------------------------- MESSAGES -------------------------------- */
+function msg(text,cls){ S.log.push({text,cls:cls||''}); if(S.log.length>40)S.log.shift(); }
+
+/* ============================== RENDERING ================================= */
+const $=(id)=>document.getElementById(id);
+function itemName(it){ let n=it.name; if(it.ench)n='+'+it.ench+' '+n; if(it.qty>1)n=it.qty+'× '+n; return n; }
+
+function sizeMap(){
+  const wrap=$('mapwrap'); const w=wrap.clientWidth, h=wrap.clientHeight;
+  // pick viewport that fits; keep odd dims so player centers
+  COLS=21; ROWS=15;
+  let cell=Math.floor(Math.min(w/COLS, h/ROWS));
+  cell=clamp(cell,10,30);
+  const map=$('map');
+  map.style.gridTemplateColumns='repeat('+COLS+','+cell+'px)';
+  map.style.gridTemplateRows='repeat('+ROWS+','+cell+'px)';
+  map.style.fontSize=Math.floor(cell*0.86)+'px';
+  map._cell=cell;
+}
+function render(){
+  if(!S||!S.p) return;
+  renderHUD();
+  renderMap();
+  renderLog();
+  // center button label
+  const here=itemAt(S.p.x,S.p.y); const t=S.map[S.p.y][S.p.x];
+  $('centerLbl').textContent = here&&here.gold?'·' : here?'grab' : (t==='>'?'down':t==='<'?'up':'wait');
+  $('stairBtn').disabled = !(t==='>'||t==='<');
+  $('castBtn').disabled = !(classOf().caster || S.p.spells.length);
+}
+function renderHUD(){
+  const p=S.p;
+  $('hName').textContent=p.name+' the '+raceOf().name+' '+classOf().name;
+  $('hDepth').textContent=S.depth; $('hClvl').textContent=p.level; $('hGold').textContent=p.gold;
+  setBar('hp',p.hp,p.maxhp,'HP '+Math.max(0,p.hp)+'/'+p.maxhp);
+  setBar('mp',p.mp,p.maxmp,'MP '+p.mp+'/'+p.maxmp);
+  setBar('xp',p.xp,p.xpNext,'XP '+Math.floor(p.xp/p.xpNext*100)+'%');
+  setBar('food',p.food,p.foodMax, foodWord());
+}
+function foodWord(){ const f=S.p.food/S.p.foodMax; return f<=0?'STARVING':f<.12?'Hungry':f<.45?'Peckish':f<.85?'Fed':'Full'; }
+function setBar(id,v,max,txt){ const pc=max>0?clamp(v/max*100,0,100):0; $(id+'Bar').style.width=pc+'%'; $(id+'Txt').textContent=txt; }
+function glyphFor(x,y){
+  if(x===S.p.x&&y===S.p.y) return {ch:'@',c:'var(--white)'};
+  const m=monAt(x,y); if(m&&S.vis[y][x]) return {ch:m.g,c:m.c};
+  const it=itemAt(x,y); if(it&&S.vis[y][x]) return {ch:it.g||'?',c:COL[it.g]||'var(--white)'};
+  const t=S.map[y][x];
+  return {ch:t,c:COL[t]||'var(--floor)'};
+}
 function renderMap(){
-  let m = MAP_TEMPLATE;
-  for(const id in WORLD.regions){
-    const r = WORLD.regions[id];
-    const g = (id===S.loc) ? '[@]' : (S.discovered.includes(id) ? '['+r.token+']' : '[?]');
-    m = m.replace('['+r.token+']', g);
+  const map=$('map'); if(!map._cell) sizeMap();
+  const halfC=COLS>>1, halfR=ROWS>>1;
+  const ox=clamp(S.p.x-halfC,0,MW-COLS), oy=clamp(S.p.y-halfR,0,MH-ROWS);
+  let html='';
+  for(let sy=0;sy<ROWS;sy++){
+    for(let sx=0;sx<COLS;sx++){
+      const x=ox+sx,y=oy+sy;
+      if(x<0||y<0||x>=MW||y>=MH){ html+='<span></span>'; continue; }
+      if(!S.seen[y][x]){ html+='<span></span>'; continue; }
+      const g=glyphFor(x,y);
+      if(S.vis[y][x]){ html+='<span style="color:'+g.c+'">'+esc(g.ch)+'</span>'; }
+      else { // remembered: terrain only, dimmed
+        const t=S.map[y][x]; const ch=(t==='#'||t==='.'||t==='+'||t==='>'||t==='<')?t:'.';
+        html+='<span style="color:#33333e">'+esc(ch)+'</span>'; }
+    }
   }
-  return m;
+  map.innerHTML=html;
 }
-function threatDots(n){ return '!'.repeat(Math.min(5,n)); }
-
-/* ----------------------------- STATE ----------------------------------- */
-const SAVE_KEY = 'dead_miles_save_v1';
-let S = null;
-
-function freshState(arch, veh){
-  const a = ARCHETYPES.find(x=>x.id===arch);
-  const v = STARTER_VEHICLES.find(x=>x.id===veh);
-  const gear = a.perk==='gearhead';
-  const st = {
-    miles:0, scrap:gear?15:8, fuel:v.stats.fuelMax,
-    danger:1,
-    // roguelike run
-    act:1, stage:0, lead:5, route:null, choices:null, node:null,
-    relics:[], endless:false,
-    run:{ kills:0, elites:0, bosses:0, relics:0, score:0 },
-    nodeFaction:null, objective:'Outrun the horde. Reach the coast and the last boat.',
-    seenBeats:[], _inBoss:false, _pendingRelic:false, _phoenixUsed:false,
-    // zombie evolution
-    seenStrains:[], tactics:{melee:0, ram:0},
-    // factions
-    rep:{convoy:0, haven:0, reaper:0, remnant:0}, ally:null,
-    surv:{
-      name:a.name, perk:a.perk,
-      maxHp:a.stats.maxHp, hp:a.stats.maxHp,
-      atk:a.stats.atk, def:a.stats.def, agi:a.stats.agi, scav:a.stats.scav,
-      crit:5, dodge:0, regen:0,
-      level:1, xp:0, xpNext:30,
-      flags:{}, mods:[],
-    },
-    veh:{
-      name:v.name,
-      maxInteg:v.stats.maxInteg + (gear?15:0), integ:v.stats.maxInteg + (gear?15:0),
-      armor:v.stats.armor + (gear?1:0), ram:v.stats.ram, speed:v.stats.speed,
-      fuelMax:v.stats.fuelMax,
-      autorepair:0, turret:0,
-      flags:{}, mods:[],
-    },
-    inv:{ medkits:1, fuelcans:1 },
-    log:[], over:false,
-  };
-  return st;
+function esc(c){ return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c; }
+function renderLog(){
+  const box=$('log'); let html='';
+  const last=S.log.slice(-4).reverse();
+  for(const l of last){ html+='<div class="m-'+(l.cls||'dim')+'">'+l.text+'</div>'; }
+  box.innerHTML=html;
 }
 
-function save(){ try{ if(S) localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){} }
-function clearSave(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} }
-function hasSave(){ try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; } }
-function load(){ try{ S = JSON.parse(localStorage.getItem(SAVE_KEY)); return !!S; }catch(e){ return false; } }
-function wipe(){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} S=null; }
+/* ============================== OVERLAY SCREENS =========================== */
+function showScreen(html){ $('screenBody').innerHTML=html; $('screen').classList.add('show'); }
+function hideScreen(){ $('screen').classList.remove('show'); if(S&&!S.over)S.mode='play'; }
 
-/* ----------------------------- META (persistent) ----------------------- */
-const META_KEY = 'dead_miles_meta_v1';
-let META = null;
-function defaultMeta(){ return { salvage:0, bestScore:0, runs:0, escapes:0, deepestAct:1,
-  vehicles:['beater','van'], survivors:['drifter','soldier','mechanic'], perks:[] }; }
-function loadMeta(){ try{ META = JSON.parse(localStorage.getItem(META_KEY)); }catch(e){} if(!META || !META.vehicles) META = defaultMeta(); return META; }
-function saveMeta(){ try{ localStorage.setItem(META_KEY, JSON.stringify(META)); }catch(e){} }
-function metaHas(id){ return META.vehicles.includes(id) || META.survivors.includes(id) || META.perks.includes(id); }
+/* ---- title ---- */
+function titleScreen(){
+  S=newState(); S.mode='menu';
+  const hi=getHi();
+  showScreen(`
+    <div class="center">
+      <h1>ABYSSAL DOMAINS</h1>
+      <div class="sub">a pocket roguelike of the ancient deep</div>
+    </div>
+    <pre style="color:var(--dim);font-size:11px;line-height:1.15;text-align:center;margin:6px 0">      .-=≡≡=-.
+    /  __   __ \\
+   |  (oo) (oo) |   the dark is patient,
+    \\   \\__/   /    and it is deep.
+     '-.____.-'</pre>
+    ${hi.score?`<div class="center" style="color:var(--gold);font-size:12px;margin-bottom:6px">★ best: ${hi.score} pts · DLvl ${hi.depth}${hi.won?' · ESCAPED':''}</div>`:''}
+    <button class="opt" onclick="startCreate()"><b>▸ DESCEND</b> — begin a new delve<span class="d">Choose a hero and enter the dungeon. Death is permanent.</span></button>
+    <button class="opt" onclick="howto()"><b>?</b> How to play<span class="d">Controls, symbols, and survival tips.</span></button>
+    <div class="hint">Reach the Sanctum at depth ${WIN_DEPTH}, slay the Ancient Wyrm, and claim the Orb.</div>
+  `);
+}
+function howto(){
+  showScreen(`
+    <h2>HOW TO PLAY</h2>
+    <p style="font-size:13px;color:var(--ink);line-height:1.5">
+      Move with the <b>3×3 pad</b> (corners = diagonals). The <b>centre</b> button waits, grabs an item, or takes stairs. <b>Bump a monster</b> to attack it.<br><br>
+      On a keyboard: <b>arrows / WASD / hjkl+yubn</b> to move, <b>g</b> grab, <b>i</b> items, <b>z</b> cast, <b>R</b> rest, <b>&gt;</b>/<b>&lt;</b> stairs.
+    </p>
+    <h2>SYMBOLS</h2>
+    <div class="glyphkey">
+      <b style="color:var(--white)">@</b> you &nbsp; <b style="color:var(--wall)">#</b> wall &nbsp; <b>.</b> floor &nbsp; <b style="color:var(--cyan)">&gt;</b> stairs down &nbsp; <b style="color:var(--cyan)">&lt;</b> up<br>
+      <b style="color:var(--red)">!</b> potion &nbsp; <b style="color:var(--white)">?</b> scroll &nbsp; <b style="color:var(--cyan)">/</b> weapon &nbsp; <b style="color:var(--blue)">[</b> armor &nbsp; <b style="color:var(--food)">%</b> food &nbsp; <b style="color:var(--gold)">$</b> gold &nbsp; <b style="color:var(--mag)">*</b> the Orb<br>
+      letters are monsters — the rarer the letter, the deadlier.
+    </div>
+    <h2>SURVIVAL</h2>
+    <p style="font-size:13px;color:var(--dim);line-height:1.5">
+      Rest to heal when safe, but resting burns food. Eat rations before you starve. Read unknown murky potions at your peril. Descend when ready — you can climb back up, but the only way truly out is the Orb.
+    </p>
+    <button class="opt" onclick="titleScreen()"><b>↩ Back</b></button>
+  `);
+}
 
-/* ----------------------------- UTIL ------------------------------------ */
-let RNG = Math.random; // swapped to a seeded generator during Daily runs
-function mulberry32(seed){ let a=seed>>>0; return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-const rnd = (n)=>Math.floor(RNG()*n);
-const pick = (arr)=>arr[rnd(arr.length)];
-const chance = (pct)=>RNG()*100 < pct;
-const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+/* ---- character creation ---- */
+let _cre={race:'human',cls:'fighter'};
+function startCreate(){ _cre={race:'human',cls:'fighter'}; creScreen(); }
+function creScreen(){
+  const R=RACES.find(r=>r.id===_cre.race), C=CLASSES.find(c=>c.id===_cre.cls);
+  showScreen(`
+    <h1 style="font-size:20px">CREATE YOUR HERO</h1>
+    <h2>Race</h2>
+    ${RACES.map(r=>`<button class="opt ${r.id===_cre.race?'sel':''}" onclick="_cre.race='${r.id}';creScreen()"><b>${r.name}</b> <span class="tag">${statTag(r.mod)}</span><span class="d">${r.desc}</span></button>`).join('')}
+    <h2>Class</h2>
+    ${CLASSES.map(c=>`<button class="opt ${c.id===_cre.cls?'sel':''}" onclick="_cre.cls='${c.id}';creScreen()"><b>${c.name}</b> <span class="tag">${c.caster?'caster':'martial'}</span><span class="d">${c.desc}</span></button>`).join('')}
+    <button class="opt" style="border-color:var(--gold);background:#23210f" onclick="beginGame()"><b>▸ ENTER THE DUNGEON as the ${R.name} ${C.name}</b></button>
+    <button class="opt" onclick="titleScreen()"><b>↩ Back</b></button>
+  `);
+}
+function statTag(mod){ const parts=[]; for(const k in mod){ if(mod[k]) parts.push((mod[k]>0?'+':'')+mod[k]+' '+k.toUpperCase()); } return parts.join(' '); }
+function beginGame(){
+  S=newState(); S.mode='play';
+  createPlayer(_cre.race,_cre.cls);
+  buildLevel(1,false);
+  S.log=[]; msg('You enter the Abyssal Domains. Level 1.','sys');
+  msg('Find the Orb in the deep. Stay alive.','warn');
+  hideScreen(); sizeMap(); render();
+}
 
-/* ----------------------------- UI LAYER -------------------------------- */
-const UI = {
-  scene:null, choices:null, typing:false, _full:null, _q:[],
+/* ---- inventory ---- */
+function openInventory(){ S.mode='menu'; invScreen(); }
+function invScreen(){
+  const p=S.p; const groups={};
+  p.inv.forEach((it,i)=>{ (groups[it.kind]=groups[it.kind]||[]).push({it,i}); });
+  const order=['potion','scroll','food','weapon','armor'];
+  let body='<h1 style="font-size:20px">INVENTORY</h1>';
+  body+=`<div class="grid2" style="margin-bottom:8px">
+    <div class="statline"><span>Weapon</span><b>${p.weapon?itemName(p.weapon):'— bare hands —'}</b></div>
+    <div class="statline"><span>Armor</span><b>${p.armor?itemName(p.armor):'— none —'}</b></div></div>`;
+  if(!p.inv.length) body+='<p style="color:var(--dim)">Your pack is empty.</p>';
+  order.forEach(k=>{ if(!groups[k])return; body+='<h2>'+k+'s</h2>';
+    groups[k].forEach(({it,i})=>{ body+=`<button class="opt" onclick="itemMenu(${i})"><span class="invitem"><span><b>${it.g||'?'}</b> ${itemName(it)}</span><span class="q">${it.qty>1?'×'+it.qty:''}</span></span></button>`; });
+  });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Close</b></button>';
+  showScreen(body);
+}
+function itemMenu(i){
+  const it=S.p.inv[i]; if(!it) return invScreen();
+  let body='<h1 style="font-size:18px">'+itemName(it)+'</h1>';
+  body+='<p style="color:var(--dim);font-size:12px">'+itemDesc(it)+'</p>';
+  if(it.kind==='weapon') body+=`<button class="opt" onclick="equipItem(${i})"><b>⚔ Wield</b></button>`;
+  else if(it.kind==='armor') body+=`<button class="opt" onclick="equipItem(${i})"><b>🛡 Wear</b></button>`;
+  else body+=`<button class="opt" onclick="useItem(${i})"><b>✛ ${it.kind==='food'?'Eat':'Use'}</b></button>`;
+  body+=`<button class="opt" onclick="dropItem2(${i})"><b>▾ Drop</b></button>`;
+  body+='<button class="opt" onclick="invScreen()"><b>↩ Back</b></button>';
+  showScreen(body);
+}
+function itemDesc(it){
+  if(it.kind==='weapon') return 'Damage '+it.dmg+(it.acc?' · acc '+(it.acc>0?'+':'')+it.acc:'')+(it.ench?' · enchanted +'+it.ench:'');
+  if(it.kind==='armor') return 'Armor +'+((it.ac||0)+(it.ench||0));
+  if(it.kind==='food') return 'Restores about '+it.sat+' food.';
+  if(it.bad) return 'An unidentified, murky brew. Could be anything.';
+  return it.name.replace(/^(potion|scroll) of /,'A $1 that ')+'.';
+}
+function equipItem(i){
+  const it=S.p.inv[i]; if(!it) return invScreen();
+  const slot=it.kind==='weapon'?'weapon':'armor';
+  const cur=S.p[slot];
+  S.p[slot]=it; S.p.inv.splice(i,1);
+  if(cur) S.p.inv.push(cur);
+  recalc(); msg('You '+(slot==='weapon'?'wield':'wear')+' the '+it.name+'.','good');
+  hideScreen(); endTurn();
+}
+function useItem(i){
+  const it=S.p.inv[i]; if(!it) return invScreen();
+  hideScreen();
+  if(it.use) it.use(S.p);
+  it.qty=(it.qty||1)-1; if(it.qty<=0) S.p.inv.splice(S.p.inv.indexOf(it),1);
+  recalc(); endTurn();
+}
+function dropItem2(i){
+  const it=S.p.inv[i]; if(!it) return invScreen();
+  if(itemAt(S.p.x,S.p.y)){ msg('There is already something here.','dim'); return invScreen(); }
+  const one=Object.assign({},it); one.qty=1;
+  if(it.qty>1){ it.qty--; } else S.p.inv.splice(i,1);
+  dropItem(one,S.p.x,S.p.y); msg('You drop the '+it.name+'.','dim');
+  hideScreen(); render();
+}
 
-  init(){
-    this.scene = document.getElementById('scene');
-    this.choices = document.getElementById('choices');
-  },
+/* ---- cast ---- */
+function openCast(){
+  if(!S.p.spells.length){ msg('You know no spells.','dim'); return; }
+  S.mode='menu';
+  let body='<h1 style="font-size:20px">CAST A SPELL</h1>';
+  body+='<div class="sub">MP '+S.p.mp+'/'+S.p.maxmp+'</div>';
+  S.p.spells.forEach((id)=>{ const sp=SPELLS[id]; const ok=S.p.mp>=sp.cost;
+    body+=`<button class="opt" ${ok?'':'disabled style=opacity:.4'} onclick="${ok?`doCast('${id}')`:''}"><b>${sp.name}</b> <span class="tag">${sp.cost} MP</span><span class="d">${sp.desc}</span></button>`; });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Back</b></button>';
+  showScreen(body);
+}
+function doCast(id){
+  const sp=SPELLS[id]; if(S.p.mp<sp.cost){ return; }
+  hideScreen();
+  const ok=sp.cast();
+  if(ok!==false){ S.p.mp-=sp.cost; endTurn(); } else { render(); }
+}
 
-  clear(){ this.scene.innerHTML=''; },
+/* ---- character sheet ---- */
+function openChar(){
+  S.mode='menu'; const p=S.p;
+  const a=p.attr;
+  showScreen(`
+    <h1 style="font-size:20px">${p.name}</h1>
+    <div class="sub">${raceOf().name} ${classOf().name} · Level ${p.level} · Depth ${S.depth}</div>
+    <div class="grid2">
+      <div class="statline"><span>Strength</span><b>${a.str}</b></div>
+      <div class="statline"><span>Dexterity</span><b>${a.dex}</b></div>
+      <div class="statline"><span>Toughness</span><b>${a.tou}</b></div>
+      <div class="statline"><span>Willpower</span><b>${a.wil}</b></div>
+      <div class="statline"><span>Perception</span><b>${a.per}</b></div>
+      <div class="statline"><span>Accuracy</span><b>+${p.acc}</b></div>
+      <div class="statline"><span>Armor Class</span><b>${p.ac}</b></div>
+      <div class="statline"><span>Crit chance</span><b>${p.crit}%</b></div>
+      <div class="statline"><span>Damage</span><b>${p.weapon?p.weapon.dmg+(p.weapon.ench?'+'+p.weapon.ench:''):'1d3'}</b></div>
+      <div class="statline"><span>Gold</span><b>${p.gold}</b></div>
+    </div>
+    <div class="statline"><span>Wielding</span><b>${p.weapon?itemName(p.weapon):'bare hands'}</b></div>
+    <div class="statline"><span>Wearing</span><b>${p.armor?itemName(p.armor):'nothing'}</b></div>
+    ${p.spells.length?`<div class="statline"><span>Spells</span><b>${p.spells.map(s=>SPELLS[s].name).join(', ')}</b></div>`:''}
+    <button class="opt" onclick="hideScreen();render()"><b>↩ Close</b></button>
+  `);
+}
 
-  // queue a line to be typed out
-  add(html, cls){
-    const el = document.createElement('div');
-    el.className = 'narr ' + (cls||'');
-    el.innerHTML = html;
-    this.scene.appendChild(el);
-    this._scroll();
-    return el;
-  },
-  art(name, col){
-    const pre = document.createElement('pre');
-    pre.className = 'art ' + (col||'');
-    pre.textContent = ART[name] || '';
-    this.scene.appendChild(pre);
-    this._scroll();
-  },
-  artText(str, col){
-    const pre = document.createElement('pre');
-    pre.className = 'art ' + (col||'');
-    pre.textContent = str;
-    this.scene.appendChild(pre);
-    this._scroll();
-  },
-  speaker(name, cls){
-    const el = document.createElement('div');
-    el.className='speaker '+(cls||'');
-    el.textContent = name;
-    this.scene.appendChild(el);
-  },
-  rule(){ const e=document.createElement('div'); e.className='rule'; e.textContent='— — — — — — — — — — — —'; this.scene.appendChild(e); },
+/* ---- game over ---- */
+function showGameOver(won,score){
+  S.mode='over';
+  const hi=getHi();
+  const best=score>=hi.score;
+  showScreen(`
+    <div class="center">
+      <h1 style="color:${won?'var(--gold)':'var(--red)'}">${won?'YOU ESCAPED':'YOU DIED'}</h1>
+      <div class="sub">${won?'The Orb is yours. Daylight, at last.':'The dark keeps what it claims.'}</div>
+    </div>
+    <p class="center big">${S.p.name} the ${raceOf().name} ${classOf().name}</p>
+    <p class="center" style="color:var(--dim)">${won?'claimed the Orb of the Ancients':'fell on dungeon level '+S.depth} at character level ${S.p.level}.</p>
+    <div class="grid2" style="margin:10px 0">
+      <div class="statline"><span>Depth reached</span><b>${S.depth}</b></div>
+      <div class="statline"><span>Character level</span><b>${S.p.level}</b></div>
+      <div class="statline"><span>Gold</span><b>${S.p.gold}</b></div>
+      <div class="statline"><span>Turns</span><b>${S.turn}</b></div>
+    </div>
+    <p class="center big" style="color:var(--gold)">SCORE ${score} ${best?'· ★ NEW BEST!':''}</p>
+    ${!best&&hi.score?`<p class="center" style="color:var(--dim);font-size:12px">best: ${hi.score}</p>`:''}
+    <button class="opt" style="border-color:var(--gold);background:#23210f" onclick="startCreate()"><b>▸ DELVE AGAIN</b></button>
+    <button class="opt" onclick="titleScreen()"><b>↩ Title</b></button>
+  `);
+}
 
-  // Typewriter for a single narrative line element
-  type(html, cls){
-    return new Promise(res=>{
-      const el = this.add('', cls);
-      const tmp = document.createElement('div'); tmp.innerHTML=html;
-      const text = tmp.textContent;
-      let i=0; this.typing=true; this._full={el,html};
-      el.classList.add('cursor');
-      const step=()=>{
-        if(!this.typing){ // skipped
-          el.innerHTML=html; el.classList.remove('cursor'); this._scroll(); return res();
-        }
-        el.textContent = text.slice(0,i);
-        this._scroll();
-        if(i>=text.length){ el.innerHTML=html; el.classList.remove('cursor'); this.typing=false; return res(); }
-        i++;
-        const c = text[i-1];
-        const d = (c==='.'||c==='!'||c==='?')?34:(c===','?20:12);
-        setTimeout(step,d);
-      };
-      step();
-    });
-  },
-  sceneTap(){ if(this.typing){ this.typing=false; } },
-
-  _scroll(){ this.scene.scrollTop = this.scene.scrollHeight; },
-
-  // choices: [{label, key, cls, cost, disabled, fn}]
-  setChoices(list){
-    this.choices.innerHTML='';
-    list.forEach((c,idx)=>{
-      const b=document.createElement('button');
-      b.className='choice '+(c.cls||'')+(c.disabled?' disabled':'');
-      const key = c.key!==undefined?c.key:(idx+1);
-      let html = '<span class="key">'+key+'</span>'+c.label;
-      if(c.cost) html += '<span class="cost">'+c.cost+'</span>';
-      b.innerHTML=html;
-      if(!c.disabled) b.onclick=()=>{ this.lockBriefly(); c.fn(); };
-      this.choices.appendChild(b);
-    });
-  },
-  tapToContinue(fn){
-    this.setChoices([{label:'▾ tap to continue', cls:'tap', key:'', fn}]);
-  },
-  lockBriefly(){ /* prevent double-fire */ const c=this.choices; c.style.pointerEvents='none'; setTimeout(()=>c.style.pointerEvents='',180); },
-
-  toast(msg, cls){
-    const t=document.getElementById('toast');
-    const e=document.createElement('div'); e.className='toast '+(cls||''); e.innerHTML=msg;
-    t.appendChild(e); setTimeout(()=>e.remove(),2100);
-  },
-
-  hud(){
-    if(!S) return;
-    document.getElementById('hudMiles').textContent=S.act||1;
-    document.getElementById('hudScrap').textContent=S.scrap;
-    document.getElementById('hudFuel').textContent=(S.lead>=0?S.lead:0)+' back';
-  },
-
-  openDrawer(){ if(!S) return; this.renderDrawer(); document.getElementById('overlay').classList.add('open'); },
-  closeDrawer(){ document.getElementById('overlay').classList.remove('open'); },
-  renderDrawer(){
-    const s=S.surv, v=S.veh;
-    const bar=(cur,max,cls)=>`<div class="bar ${cls}"><i style="width:${clamp(cur/max*100,0,100)}%"></i></div>`;
-    const flagList=(o,map)=>Object.keys(o.flags||{}).filter(k=>o.flags[k]).map(k=>map[k]||k);
-    const survFlags={secondWind:'Second Wind',berserk:'Berserker',medic:'Field Medic',lifesteal:'Savage',execute:'Headhunter'};
-    const vehFlags={tires:'Off-Road Tires',nitro:'Nitrous',flamer:'Flame Jets',plow:'Grim Plow'};
-    const sMods=flagList(s,survFlags).concat(
-      s.crit>5?['+'+(s.crit-5)+'% crit']:[], s.dodge?['+'+s.dodge+'% dodge']:[], s.regen?['+'+s.regen+' regen']:[]);
-    const vMods=flagList(v,vehFlags).concat(
-      v.autorepair?['repair '+v.autorepair+'/fight']:[], v.turret?['turret '+v.turret]:[]);
-    document.getElementById('drawer').innerHTML=`
-      <h2>STATUS<span class="x" onclick="UI.closeDrawer()">[ close ]</span></h2>
-      <div class="panel">
-        <div class="pt">SURVIVOR // <b>${s.name}</b> · LV ${s.level}</div>
-        <div class="stat"><span class="nm">Health</span><span class="vl">${s.hp}/${s.maxHp}</span>${bar(s.hp,s.maxHp,'hp')}</div>
-        <div class="stat"><span class="nm">XP</span><span class="vl">${s.xp}/${s.xpNext}</span>${bar(s.xp,s.xpNext,'xp')}</div>
-        <div class="stat"><span class="nm">Attack</span><span class="vl">${s.atk}</span></div>
-        <div class="stat"><span class="nm">Defense</span><span class="vl">${s.def}</span></div>
-        <div class="stat"><span class="nm">Agility</span><span class="vl">${s.agi}</span></div>
-        <div class="stat"><span class="nm">Scavenging</span><span class="vl">${s.scav}</span></div>
-        <div class="modlist">${sMods.length?'<span class="tag">mods:</span> '+sMods.map(m=>'<b>'+m+'</b>').join(' · '):'<i>no mods yet</i>'}</div>
-      </div>
-      <div class="panel">
-        <div class="pt">VEHICLE // <b>${v.name}</b></div>
-        <div class="stat"><span class="nm">Integrity</span><span class="vl">${v.integ}/${v.maxInteg}</span>${bar(v.integ,v.maxInteg,'veh')}</div>
-        <div class="stat"><span class="nm">Armor</span><span class="vl">${v.armor}</span></div>
-        <div class="stat"><span class="nm">Ram dmg</span><span class="vl">${v.ram}</span></div>
-        <div class="stat"><span class="nm">Speed</span><span class="vl">${v.speed}</span></div>
-        <div class="modlist">${vMods.length?'<span class="tag">mods:</span> '+vMods.map(m=>'<b>'+m+'</b>').join(' · '):'<i>no mods yet</i>'}</div>
-      </div>
-      <div class="panel">
-        <div class="pt">RELICS ◈ ${S.relics&&S.relics.length?'':'<i>none yet</i>'}</div>
-        <div class="modlist">${(S.relics||[]).map(id=>{const r=relicById(id);return r?'<b>'+r.name+'</b> <span class="small">— '+r.desc+'</span>':'';}).join('<br>')}</div>
-      </div>
-      <div class="panel">
-        <div class="pt">FACTIONS ${S.ally?'// allied: <b>'+FACTION_INFO[S.ally].name+'</b>':''}</div>
-        <div class="modlist">${Object.keys(FACTION_INFO).map(f=>{
-          const rel=factionRelation(f); const v=S.rep[f];
-          const col = rel==='ally'?'var(--ink)':rel==='hostile'?'var(--red)':'var(--ink-dim)';
-          const tag = rel==='ally'?'★ ALLIED':rel==='hostile'?'⚔ hostile':standingLabel(v)+' ('+(v>=0?'+':'')+v+')';
-          return '<div style="color:'+col+'">'+FACTION_INFO[f].name+' — '+tag+'</div>';
-        }).join('')}</div>
-      </div>
-      <div class="panel">
-        <div class="pt">RUN</div>
-        <div class="modlist">Act <b>${S.act}</b> · stage <b>${Math.min(S.stage+1,ACT_LEN+1)}/${ACT_LEN+1}</b> · horde <b>${Math.max(0,S.lead)}</b> back<br>⛭ Scrap <b>${S.scrap}</b> · ✚ Medkits <b>${S.inv.medkits}</b> · kills <b>${S.run.kills}</b> · relics <b>${S.run.relics}</b></div>
-      </div>
-      <div class="center small">DEAD MILES · run auto-saves to this device</div>
-    `;
-  },
-};
-
-/* ----------------------------- GAME FLOW ------------------------------- */
-const Game = {
-
-  /* ---- title ---- */
-  title(){
-    loadMeta();
-    UI.clear();
-    UI.art('logo','amber');
-    UI.add('<span class="small">a roguelike road-trip · outrun the dead, reach the coast</span>');
-    UI.rule();
-    UI.add('Every run, push for the boat. You\'ll die — and come back tougher.', 'dim');
-    UI.add('<span class="small">⛭ Salvage banked <b style="color:var(--amber)">'+META.salvage+'</b> &nbsp;·&nbsp; best score <b>'+META.bestScore+'</b> &nbsp;·&nbsp; escapes <b>'+META.escapes+'</b></span>');
-    const opts=[];
-    if(hasSave()) opts.push({key:'▸',label:'<b>CONTINUE RUN</b>',fn:()=>{ if(load()){ RNG=Math.random; UI.hud(); Game.routeMap('Back on the road.'); } }});
-    opts.push({key:'▸',label:'<b>NEW RUN</b>',fn:()=>Game.newRun(false)});
-    opts.push({key:'◷',label:'DAILY RUN <span class="small">— one seed, everyone, today</span>',fn:()=>Game.newRun(true)});
-    opts.push({key:'⚒',label:'THE GARAGE <span class="small">— spend salvage on permanent unlocks</span>',cls:'pickup',fn:()=>Game.metaHub()});
-    opts.push({key:'?',label:'How to play',fn:()=>Game.help()});
-    UI.setChoices(opts);
-  },
-
-  help(){
-    UI.clear();
-    UI.speaker('FIELD MANUAL','sys');
-    UI.add('• A <b>RUN</b> is a forward push to the coast. At each step you choose your next stop on the <b>route</b>.','dim');
-    UI.add('• The <b>HORDE</b> chases you from behind. Slow stops (scavenge, camp, caches) let it close. If it catches you, you fight for your life.','dim');
-    UI.add('• <b>FIGHT</b> with your Survivor (melee) &amp; Vehicle (ram). Level up for perks, garages for mods.','dim');
-    UI.add('• <b>RELICS ◈</b> are rare, build-defining passives from caches, elites &amp; bosses. Stack them into broken combos.','dim');
-    UI.add('• Death banks <b>Salvage ⛭</b> — spend it in <b>THE GARAGE</b> for permanent unlocks (new rides, survivors, perks). Start stronger every run.','dim');
-    UI.add('• Escape the coast for a huge score, then keep going endlessly. Beat your best.','warn');
-    UI.tapToContinue(()=>Game.title());
-  },
-
-  /* ---- meta hub: permanent unlocks ---- */
-  metaHub(){
-    loadMeta();
-    UI.clear(); UI.art('garage','amber'); UI.speaker('THE GARAGE','sys');
-    UI.add('Permanent unlocks, bought with <b style="color:var(--amber)">Salvage ⛭</b> banked from every run.','dim');
-    UI.add('<span class="small">Salvage <b style="color:var(--amber)">'+META.salvage+'</b> &nbsp;·&nbsp; runs <b>'+META.runs+'</b> · escapes <b>'+META.escapes+'</b> · best <b>'+META.bestScore+'</b></span>');
-    const opts=[];
-    META_STORE.forEach(it=>{
-      const owned = metaHas(it.id);
-      opts.push({ key: owned?'✓':'⛭', cls: owned?'':'pickup', cost: owned?'owned':it.cost+' ⛭',
-        disabled: owned || META.salvage<it.cost,
-        label:'<b>'+it.name+'</b><br><span class="small">'+it.desc+'</span>',
-        fn:()=>{ META.salvage-=it.cost;
-          if(it.type==='vehicle') META.vehicles.push(it.id);
-          else if(it.type==='survivor') META.survivors.push(it.id);
-          else META.perks.push(it.id);
-          saveMeta(); UI.toast('Unlocked: '+it.name,'amber'); Game.metaHub(); } });
-    });
-    opts.push({ key:'▸', label:'Back to title', fn:()=>Game.title() });
-    UI.setChoices(opts);
-  },
-
-  /* ---- start a new run ---- */
-  newRun(daily){
-    loadMeta();
-    Game._daily = daily;
-    if(daily){ const d=new Date(); Game._seed=(d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate())>>>0; }
-    Game.pickSurvivor();
-  },
-  pickSurvivor(){
-    UI.clear(); UI.speaker('WHO ARE YOU?','sys');
-    UI.add('The apocalypse files everyone to one sharp edge.'+(Game._daily?' <span class="small">[DAILY]</span>':''),'dim');
-    const opts=ARCHETYPES.map((a,i)=>{
-      const locked = a.unlock && !META.survivors.includes(a.id);
-      return { key:i+1, disabled:locked,
-        label:'<b>'+a.name+'</b> '+(locked?'<span class="small">🔒 unlock in the Garage</span>':'')+'<br><span class="small">'+a.blurb+' · '+a.perkText+'</span>',
-        fn:()=>{ Game._arch=a.id; Game.pickVehicle(); } };
-    });
-    opts.push({ key:'↩', label:'Back', fn:()=>Game.title() });
-    UI.setChoices(opts);
-  },
-  pickVehicle(){
-    UI.clear(); UI.speaker('YOUR RIDE','sys');
-    UI.add('Pick the heap you\'ll bleed for.','dim');
-    const opts=STARTER_VEHICLES.map((v,i)=>{
-      const locked = v.unlock && !META.vehicles.includes(v.id);
-      return { key:i+1, disabled:locked,
-        label:'<b>'+v.name+'</b> '+(locked?'<span class="small">🔒</span>':'')+'<br><span class="small">'+v.blurb+'</span>',
-        fn:()=>Game.startRun(Game._arch, v.id) };
-    });
-    opts.push({ key:'↩', label:'Back', fn:()=>Game.pickSurvivor() });
-    UI.setChoices(opts);
-  },
-  async startRun(arch, veh){
-    RNG = Game._daily ? mulberry32(Game._seed) : Math.random;
-    S = freshState(arch, veh);
-    // meta start-perks
-    if(META.perks.includes('p_medkit')){ S.inv.medkits++; S.surv.maxHp+=8; S.surv.hp+=8; }
-    if(META.perks.includes('p_scrap')) S.scrap+=25;
-    if(META.perks.includes('p_lead')) S.lead+=2;
-    // archetype start-perks
-    if(S.surv.perk==='berserk_start') S.surv.flags.berserk=true;
-    if(arch==='scrapper') S.scrap+=15;
-    if(META.perks.includes('p_relic')) Game.gainRelic(pick(RELICS).id);
-    save(); UI.hud();
-    UI.clear(); UI.art('car','blue');
-    await UI.type('You drop into the <b>'+S.veh.name+'</b>, fire it up, and put the dead in your mirrors.');
-    if(Game._daily) await UI.type('<span class="small">DAILY — seed '+Game._seed+'. The same road for everyone today.</span>','warn');
-    Game.actIntro();
-  },
-  async actIntro(){
-    const act = ACTS[(S.act-1)%ACTS.length];
-    UI.clear(); UI.art('road');
-    UI.speaker('ACT '+S.act+' · '+act.name,'sys');
-    await UI.type('<span class="small">'+act.sub+'</span>');
-    await UI.type('The horde is '+S.lead+' stages back and gaining. Don\'t stop moving for long.');
-    Game.genChoices();
-    UI.tapToContinue(()=>Game.routeMap());
-  },
-
-  /* ---- routing: after any node resolves ---- */
-  resume(msg){ if(!S || S.over) return; save(); return Game.afterNode(msg); },
-
-  afterNode(msg){
-    if(!S || S.over) return; save();
-    if(S._inBoss){ S._inBoss=false; return Game.actComplete(); }
-    if(S._pendingRelic){ S._pendingRelic=false; return Game.relicReward(()=>Game.advanceRoute()); }
-    return Game.advanceRoute(msg);
-  },
-  advanceRoute(msg){
-    if(!S || S.over) return;
-    if(S.lead<=0) return Game.hordeAssault();
-    Game.genChoices(); Game.routeMap(msg);
-  },
-
-  /* ---- the route map (main hub) ---- */
-  routeMap(msg){
-    if(!S || S.over) return;
-    save(); UI.clear(); UI.hud();
-    const act = ACTS[(S.act-1)%ACTS.length];
-    UI.artText(Game.renderRoute());
-    UI.speaker('ACT '+S.act+' · '+act.name,'sys');
-    const leadCol = S.lead<=1?'var(--red)':S.lead<=2?'var(--amber)':'var(--ink-dim)';
-    UI.add('<span class="small">stage '+Math.min(S.stage+1,ACT_LEN+1)+'/'+(ACT_LEN+1)+' &nbsp;·&nbsp; mutation tier '+Game.mutTier()+' &nbsp;·&nbsp; horde <span style="color:'+leadCol+'">'+Math.max(0,S.lead)+' behind</span></span>');
-    if(msg) UI.add(msg,'dim');
-    if(S.lead<=1) UI.add('⚠ The horde is on your bumper. Pick a fast path.','bad');
-    if(S.surv.hp < S.surv.maxHp*0.4) UI.add('✚ You\'re badly hurt — a Camp might be worth the time.','bad');
-    if(S.relics.length) UI.add('<span class="small">◈ '+S.relics.map(id=>relicById(id).name).join(' · ')+'</span>','loot');
-    UI.add('<span class="small">▸ where to next?</span>','warn');
-    const opts = (S.choices||[]).map((nd)=>{
-      const t=NODE_TYPES[nd.type]||{icon:'?',label:'?',desc:'',time:1};
-      return { key:t.icon, cls:(nd.type==='cache'||nd.type==='elite')?'pickup':(nd.type==='boss'?'danger':''),
-        label:'<b>'+(nd.title||t.label)+'</b> <span class="small">— '+(nd.desc||t.desc)+(t.time>1?' · slow (horde +1)':'')+'</span>',
-        fn:()=>Game.enterNode(nd) };
-    });
-    opts.push({ key:'✕', cls:'danger', label:'Save &amp; quit to title', fn:()=>{ save(); Game.title(); } });
-    UI.setChoices(opts);
-  },
-  renderRoute(){
-    const total=ACT_LEN+1; let road='';
-    for(let i=0;i<total;i++){ road += i<S.stage?'=': i===S.stage?'>': (i===total-1?'*':'.'); }
-    const lead=Math.max(0,S.lead);
-    return '  [you]'+road+'[COAST *]\n  horde '+'<'.repeat(Math.min(8,lead+1))+'  ('+lead+' stages back)';
-  },
-
-  /* ---- generate the next branching choices ---- */
-  genChoices(){
-    if(S.stage>=ACT_LEN){ const act=ACTS[(S.act-1)%ACTS.length]; S.choices=[{type:'boss',title:'BOSS · '+act.bossName,desc:'the only way through'}]; return; }
-    const pool=[]; const add=(t,w)=>{ for(let i=0;i<Math.max(0,w);i++) pool.push(t); };
-    add('fight',5); add('event',3); add('scav',3); add('garage',2); add('market',2);
-    add('camp', S.surv.hp<S.surv.maxHp*0.6?4:1);
-    add('elite', 1+Math.floor(S.stage/2));
-    add('cache', 1+Math.floor(((S.act-1)%ACTS.length)/2));
-    const types=[]; let guard=0;
-    while(types.length<3 && guard++<80){ const t=pick(pool); if(!types.includes(t)) types.push(t); }
-    while(types.length<2) types.push('fight');
-    S.choices=types.map(t=>{
-      const nd={type:t};
-      if(t==='market'){ nd.faction=ACTS[(S.act-1)%ACTS.length].faction; nd.title='Outpost · '+FACTION_INFO[nd.faction].name; }
-      return nd;
-    });
-  },
-
-  enterNode(nd){
-    if(!S || S.over) return;
-    S.node=nd;
-    const t=NODE_TYPES[nd.type]||{time:1};
-    let cost=t.time||1; if(S.relics.includes('lead_foot')) cost=Math.max(0,cost-1);
-    S.lead -= cost;
-    S.stage++;
-    S.miles += 3 + rnd(3);
-    S.nodeFaction = nd.faction || ACTS[(S.act-1)%ACTS.length].faction;
-    S.danger = (S.act-1)*4 + S.stage + Math.max(0, 4 - S.lead) + (S.endless?4:0);
-    save();
-    switch(nd.type){
-      case 'fight':  return Game.combat(false);
-      case 'elite':  S._pendingRelic=true; return Game.combat(false,{elite:true});
-      case 'boss':   S._inBoss=true; return Game.bossFight();
-      case 'scav':   return Game.scavenge();
-      case 'garage': return Game.garage();
-      case 'market': return Game.market();
-      case 'camp':   return Game.rest();
-      case 'event':  return Game.roadEvent();
-      case 'cache':  return Game.relicCache();
-      default:       return Game.combat(false);
-    }
-  },
-  async bossFight(){
-    const act=ACTS[(S.act-1)%ACTS.length];
-    UI.clear(); UI.art('horde','red'); UI.speaker('BOSS · '+act.bossName,'enemy');
-    await UI.type(act.bossLine);
-    UI.tapToContinue(()=>Game.combat(true,{boss:true}));
-  },
-
-  /* ---- the horde catches you ---- */
-  async hordeAssault(){
-    UI.clear(); UI.art('horde','red'); UI.speaker('THE HORDE CATCHES YOU','enemy');
-    await UI.type('The wave crashes over the road. No more running — carve a hole and punch through, or be buried here.');
-    UI.tapToContinue(()=>Game.combat(true,{assault:true}));
-  },
-
-  /* ---- act cleared (boss down) ---- */
-  async actComplete(){
-    UI.clear(); UI.art('sun','amber'); UI.speaker('ACT '+S.act+' CLEARED','sys');
-    await UI.type('The boss falls. The road ahead opens, and for a moment the dead are far behind.','good');
-    Game.relicReward(()=>{
-      if(S.act>=ACTS.length) return Game.runWin();
-      S.act++; S.stage=0; S.lead=5 + (META.perks.includes('p_lead')?2:0);
-      Game.actIntro();
-    });
-  },
-
-  /* ---- relics ---- */
-  relicReward(then){
-    const bag=RELICS.filter(r=>!S.relics.includes(r.id));
-    if(!bag.length){ UI.toast('All relics owned!'); const sc=15+rnd(15); S.scrap+=sc; UI.toast('+'+sc+' scrap','amber'); return then(); }
-    const offers=[]; while(offers.length<3 && bag.length) offers.push(bag.splice(rnd(bag.length),1)[0]);
-    UI.clear(); UI.art('sun','amber'); UI.speaker('◈ A RELIC','sys');
-    UI.add('Something rare glints in the wreckage. Bolt one to your legend:','good');
-    UI.setChoices(offers.map((r,i)=>({ key:i+1, cls:'pickup',
-      label:'<b>'+r.name+'</b><br><span class="small">'+r.desc+'</span>',
-      fn:()=>{ Game.gainRelic(r.id); then(); } })));
-  },
-  gainRelic(id){
-    if(!S.relics.includes(id)){ S.relics.push(id); S.run.relics++; const r=relicById(id); if(r&&r.onGain)r.onGain(S); UI.toast('◈ '+r.name,'amber'); UI.hud(); save(); }
-  },
-  async relicCache(){
-    UI.clear(); UI.art('garage','amber'); UI.speaker('SEALED CACHE','sys');
-    await UI.type('A reinforced case in a wreck, somehow untouched. Inside — something rare.');
-    Game.relicReward(()=>{ const sc=8+rnd(10)+(S.relics.includes('hoarder')?8:0); S.scrap+=sc; UI.toast('+'+sc+' scrap','amber'); Game.afterNode(); });
-  },
-
-  /* ---- run end ---- */
-  async runWin(){
-    S.endless=true; clearSave();
-    UI.clear(); UI.art('sun','amber'); UI.speaker('THE RED DAWN','sys');
-    await UI.type('You smash through the last of them onto the pier. Hands haul you aboard, the boat pulls away, and the engine carries you out toward a red, impossible dawn.','good');
-    await UI.type('You reached the coast. But the dead keep learning — and every shore has its own.','dim');
-    Game.runEnd(true);
-  },
-  runEnd(escaped){
-    loadMeta();
-    const sc = S.run.kills*2 + S.run.elites*15 + S.run.bosses*40 + (S.act-1)*60 + S.run.relics*12 + Math.floor(S.miles) + (escaped?500:0) + Game.mutTier()*8;
-    S.run.score=sc;
-    const payout = Math.floor(sc/6) + S.run.bosses*5 + (escaped?40:0);
-    META.salvage += payout; META.runs++; if(escaped) META.escapes++;
-    const best = sc>META.bestScore; META.bestScore=Math.max(META.bestScore,sc); META.deepestAct=Math.max(META.deepestAct,S.act);
-    saveMeta(); clearSave();
-    UI.clear(); UI.art(escaped?'sun':'skull', escaped?'amber':'red');
-    UI.speaker(escaped?'ESCAPED — RUN COMPLETE':'YOU DIED','sys');
-    UI.add('<b>'+S.surv.name+'</b> · reached Act '+S.act+' · Level '+S.surv.level,'dim');
-    UI.rule();
-    UI.add('Kills <b>'+S.run.kills+'</b> · Elites <b>'+S.run.elites+'</b> · Bosses <b>'+S.run.bosses+'</b> · Relics <b>'+S.run.relics+'</b> · Miles <b>'+S.miles+'</b>');
-    UI.add('SCORE <b style="color:var(--amber)">'+sc+'</b>'+(best?' &nbsp;<b style="color:var(--ink)">★ NEW BEST!</b>':' <span class="small">(best '+META.bestScore+')</span>'),'good');
-    UI.add('Salvage earned <b style="color:var(--amber)">+'+payout+' ⛭</b> <span class="small">(banked '+META.salvage+')</span>','loot');
-    const opts=[];
-    if(escaped) opts.push({ key:'∞', cls:'pickup', label:'<b>KEEP DRIVING</b> <span class="small">— endless, ever harder</span>',
-      fn:()=>{ S.over=false; S.endless=true; S.act++; S.stage=0; S.lead=5; S.run.score=0; save(); Game.actIntro(); } });
-    opts.push({ key:'▸', label:'<b>NEW RUN</b>', fn:()=>{ S=null; Game.newRun(false); } });
-    opts.push({ key:'⚒', label:'THE GARAGE <span class="small">— spend '+META.salvage+' salvage</span>', cls:'pickup', fn:()=>{ S=null; Game.metaHub(); } });
-    opts.push({ key:'✕', label:'Title', fn:()=>{ S=null; Game.title(); } });
-    UI.setChoices(opts);
-  },
-
-  /* ---- faction market (settlement shop) ---- */
-  market(){
-    const fac = S.nodeFaction || 'convoy';
-    const rel = factionRelation(fac);
-    UI.clear(); UI.art('camp','amber');
-    UI.speaker((FACTION_INFO[fac]?FACTION_INFO[fac].name:'TRADERS').toUpperCase()+' OUTPOST','sys');
-    if(rel==='hostile'){ UI.add('They know your colours. The gate stays shut — nothing for you here.','bad'); UI.setChoices([{key:'▸',label:'Move on',fn:()=>Game.resume()}]); return; }
-    UI.add('Scrap on hand: <b>'+S.scrap+' ⛭</b>'+(rel==='ally'?' <span class="small">· ALLIED</span>':''),'dim');
-    const havenAlly = S.ally==='haven';
-    function item(name, desc, cost, fn, disabled){
-      return { key:'⛭', cls:'pickup', cost:cost+' ⛭', disabled:disabled || S.scrap<cost,
-        label:'<b>'+name+'</b><br><span class="small">'+desc+'</span>',
-        fn:()=>{ S.scrap-=cost; fn(); if(fac in FACTION_INFO) addRep(fac,1); UI.toast('Bought '+name,'amber'); save(); Game.market(); } };
-    }
-    const opts=[];
-    opts.push(item('Medkit ✚', havenAlly?'heal ~40% mid-fight · Haven price':'heal ~40% mid-fight', havenAlly?10:18, ()=>{ S.inv.medkits++; }));
-    const rc = Math.ceil((S.veh.maxInteg-S.veh.integ)/4);
-    opts.push(item('Field repair','restore vehicle integrity to max',rc||1,()=>{ S.veh.integ=S.veh.maxInteg; }, S.veh.integ>=S.veh.maxInteg));
-    opts.push(item('Patch yourself up','restore HP to full',Math.ceil((S.surv.maxHp-S.surv.hp)/3)||1,()=>{ S.surv.hp=S.surv.maxHp; }, S.surv.hp>=S.surv.maxHp));
-    if(fac==='reaper') opts.push(item('Reaper blade','+4 survivor attack (permanent)',40,()=>{ S.surv.atk+=4; }));
-    if(fac==='haven')  opts.push(item('Hot meal &amp; a cot','heal fully now, +4 max HP',20,()=>{ S.surv.maxHp+=4; S.surv.hp=S.surv.maxHp; }));
-    if(fac==='convoy') opts.push(item('Engine tune','+2 vehicle ram (permanent)',24,()=>{ S.veh.ram+=2; }));
-    if(fac==='remnant')opts.push(item('Combat stim','+8 max HP, heal it',22,()=>{ S.surv.maxHp+=8; S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+8); }));
-    if(fac in FACTION_INFO){
-      opts.push({ key:'✦', cls:'pickup', label:'Take a job for '+FACTION_INFO[fac].name+' <span class="small">— +standing</span>', fn:()=>Game.factionJob(fac) });
-      if(S.ally!==fac && S.rep[fac] >= FACTION_INFO[fac].pledgeAt){
-        const defect=!!S.ally;
-        opts.push({ key:'⚑', cls:'danger', label:(defect?'Defect to ':'Pledge to ')+FACTION_INFO[fac].name+' <span class="small">'+(defect?'— betrays '+FACTION_INFO[S.ally].name:'— unlocks perks, angers rivals')+'</span>', fn:()=>Game.pledge(fac) });
-      }
-    }
-    opts.push({ key:'▸', label:'Hit the road', fn:()=>Game.resume() });
-    UI.setChoices(opts);
-  },
-
-  /* ---- Remnant intel (story spine beat) ---- */
-  async intel(){
-    UI.clear(); UI.art('skull','blue');
-    UI.speaker('THE REMNANT','sys');
-    await UI.type('The scientist spreads cracked tablets across a steel table. "The infection isn\'t dying. It\'s learning. New strains every week — faster, smarter, worse."');
-    await UI.type('"But there IS a boat. The Pier, past the coastal ruins. The dead know it\'s the last way out, though — they\'re massing there." She slides you a data-slate. "Take this. And take care, driver."');
-    S.objective = 'Reach The Pier and escape by sea — but the dead are massing there.';
-    if(!S.seenBeats.includes('lab_intel')){
-      S.seenBeats.push('lab_intel');
-      S.surv.xp += 20; S.scrap += 15; UI.toast('+20 XP · +15 scrap','amber');
-      UI.add('<span class="small">Objective updated.</span>','warn');
-    }
-    save();
-    UI.tapToContinue(()=>{ if(S.surv.xp>=S.surv.xpNext) Game.levelUp(); else Game.worldMap(); });
-  },
-
-  /* ---- pledge allegiance to a faction (active alliance + consequences) ---- */
-  async pledge(f){
-    const info = FACTION_INFO[f];
-    const prev = S.ally;
-    UI.clear(); UI.art('camp','amber');
-    UI.speaker('ALLEGIANCE','sys');
-    if(prev && prev!==f){ addRep(prev,-60); }
-    S.ally = f; addRep(f,15);
-    await UI.type('You throw in with <b>'+info.name+'</b>. From here out, '+info.perk+'.','good');
-    const rivals = info.rivals.filter(x=>x in FACTION_INFO).map(x=>FACTION_INFO[x].name);
-    if(rivals.length) await UI.type(rivals.join(' and ')+' will treat you as an enemy now — gates closed, patrols hunting the roads.','warn');
-    if(prev && prev!==f) await UI.type(FACTION_INFO[prev].name+' will not forget that you turned your coat.','bad');
-    save();
-    UI.tapToContinue(()=>Game.market());
-  },
-
-  /* ---- a faction job: fight for standing ---- */
-  async factionJob(f){
-    const info = FACTION_INFO[f];
-    UI.clear(); UI.art('camp','amber');
-    UI.speaker(info.name.toUpperCase()+' — A JOB','sys');
-    await UI.type('"'+info.quest+'"');
-    await UI.type('Do it and there\'s scrap and standing in it for you.','dim');
-    UI.setChoices([
-      { key:1, cls:'danger', label:'Take the job <span class="small">— fight for it</span>', fn:()=>Game.combat(false,{quest:f}) },
-      { key:2, label:'Not now', fn:()=>Game.market() },
-    ]);
-  },
-
-  /* ---- the finale at the Pier ---- */
-  async finale(){
-    UI.clear(); UI.art('horde','red');
-    UI.speaker('THE PIER','enemy');
-    await UI.type('The road ends at a shattered pier. And there it is — a fishing boat, engine idling, a lantern swinging over the water. Salvation, fifty yards out.');
-    await UI.type('Between you and it: the dead. Thousands, packed shoulder to rotten shoulder, every grey head turning toward the roar of your engine.');
-    await UI.type('No more roads. No more choices. Just the pedal, the horde, and the sea.');
-    S._pierBoss = true;
-    UI.tapToContinue(()=>Game.combat(true));
-  },
-
-  win(){
-    S.endless = true; S.over = false; save();
-    UI.clear(); UI.art('sun','amber');
-    UI.speaker('THE RED DAWN','sys');
-    UI.add('You smash through the last of them and the '+S.veh.name+' skids onto the pier in a spray of bone and salt.','good');
-    UI.add('Hands haul you aboard. The boat pulls away. The dead pour off the pier\'s edge into the black water behind you, and the engine carries you out toward a red, impossible dawn.','');
-    UI.rule();
-    UI.add('You made it. <b>'+S.surv.name+'</b> · '+S.miles+' miles survived · Level '+S.surv.level+'.','warn');
-    UI.add('But you remember what the Remnant told you. The coast was never the end. The dead are still learning. And every boat has to make landfall again, somewhere.','dim');
-    UI.setChoices([
-      { key:'∞', cls:'pickup', label:'<b>SURVIVAL MODE</b> <span class="small">— keep going, endlessly. The threat never stops rising.</span>',
-        fn:()=>{ S.endless=true; UI.toast('ENDLESS UNLOCKED','amber'); Game.worldMap('The road goes on. It always does.'); } },
-      { key:'✕', label:'Rest here a while (back to title)', fn:()=>Game.title() },
-    ]);
-  },
-
-  async roadEvent(){
-    const ev = pick(['hitchhiker','wreck','blockade','dog']);
-    UI.clear();
-    if(ev==='hitchhiker'){
-      UI.speaker('STRANGER','');
-      await UI.type('A figure on the shoulder waves you down. Could be a survivor. Could be bait.');
-      UI.setChoices([
-        {label:'Slow down and help', key:1, fn:async()=>{
-          UI.clear();
-          if(chance(60)){ const sc=8+rnd(10); S.scrap+=sc; if(chance(40))S.inv.medkits++;
-            await UI.type('They\'re real. Grateful. They press supplies into your hands before melting back into the ruins.');
-            UI.toast('+'+sc+' scrap','amber'); UI.tapToContinue(()=>Game.resume()); }
-          else { await UI.type('It lunges the second you brake — never alive at all.'); UI.tapToContinue(()=>Game.combat(false)); }
-        }},
-        {label:'Floor it past them', key:2, cls:'danger', fn:()=>{ UI.toast('You drive on.'); Game.resume('You don\'t look in the mirror.'); }},
-      ]);
-    } else if(ev==='wreck'){
-      UI.speaker('ROADSIDE','sys');
-      await UI.type('A jackknifed fuel truck blocks half the road. The tank might still have something in it.');
-      UI.setChoices([
-        {label:'Siphon the tank', key:1, cls:'pickup', fn:async()=>{
-          UI.clear(); const f=15+rnd(20); S.fuel=Math.min(S.veh.fuelMax,S.fuel+f);
-          await UI.type('Diesel gurgles into your tank. <span class="small">+'+f+' fuel</span>'); UI.hud();
-          if(chance(35)){ await UI.type('The smell brings company.'); UI.tapToContinue(()=>Game.combat(false)); }
-          else UI.tapToContinue(()=>Game.resume());
-        }},
-        {label:'Too risky — drive around', key:2, fn:()=>Game.resume()},
-      ]);
-    } else if(ev==='dog'){
-      UI.speaker('???','');
-      await UI.type('A dog trots alongside the car for a mile, tongue out, tail going. Then it veers off into a field, alive and unbothered.');
-      await UI.type('Stupid, but it makes you smile. First time in weeks.');
-      if(chance(50)){ S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+6); UI.toast('+6 HP (morale)','red'); }
-      UI.tapToContinue(()=>Game.resume());
-    } else {
-      UI.speaker('BLOCKADE','sys');
-      await UI.type('Cars dragged across the road. A trap, or a barricade someone died defending. Boxes of supplies still sit behind it.');
-      UI.setChoices([
-        {label:'Ram through the barricade', key:1, cls:'danger', fn:async()=>{
-          UI.clear(); const dmg=3+rnd(6); S.veh.integ=Math.max(1,S.veh.integ-Math.max(0,dmg-S.veh.armor));
-          const sc=10+rnd(12); S.scrap+=sc;
-          await UI.type('Metal screams. You burst through. <span class="small">−'+dmg+' integrity, +'+sc+' scrap</span>'); UI.hud();
-          UI.tapToContinue(()=>Game.resume());
-        }},
-        {label:'Pick through it carefully on foot', key:2, fn:async()=>{
-          UI.clear();
-          if(chance(55)){ const sc=12+rnd(14); S.scrap+=sc; if(chance(30))S.inv.fuelcans++;
-            await UI.type('Quiet hands, quick work. You strip it clean. <span class="small">+'+sc+' scrap</span>'); UI.toast('+'+sc+' scrap','amber'); UI.tapToContinue(()=>Game.resume()); }
-          else { await UI.type('A shape rises from between the cars.'); UI.tapToContinue(()=>Game.combat(false)); }
-        }},
-      ]);
-    }
-  },
-
-  /* ---- scavenge from the hub ---- */
-  async scavenge(){
-    UI.clear();
-    UI.speaker('SCAVENGING','sys');
-    await UI.type(pick([
-      'You pull over at a gutted gas station and start digging.',
-      'A row of dead houses. Somebody\'s whole life, free for the taking.',
-      'An overturned semi, doors hanging open like a promise.' ]));
-    const luck = 45 + S.surv.scav*8 + (S.surv.perk==='lucky'?10:0);
-    if(chance(luck)){
-      const kind = pick(['scrap','scrap','fuel','medkit','fuelcan']);
-      if(kind==='scrap'){ const v=10+rnd(12)+S.surv.scav*2; S.scrap+=v; UI.toast('+'+v+' scrap','amber'); await UI.type('Jackpot — a toolbox of usable parts. <span class="small">+'+v+' ⛭</span>','loot'); }
-      else if(kind==='fuel'){ const v=12+rnd(16); S.fuel=Math.min(S.veh.fuelMax,S.fuel+v); UI.toast('+'+v+' fuel','blue'); await UI.type('A jerrycan with something left in it. <span class="small">+'+v+' fuel</span>','loot'); }
-      else if(kind==='medkit'){ S.inv.medkits++; UI.toast('+1 medkit','red'); await UI.type('A sealed first-aid kit. Worth its weight in gold now. <span class="small">+1 ✚</span>','loot'); }
-      else { S.inv.fuelcans++; UI.toast('+1 fuel can','blue'); await UI.type('A full fuel can, capped and waiting. <span class="small">+1 ⛽-can</span>','loot'); }
-      UI.hud();
-      if(chance(25+S.danger*2)){ await UI.type('The noise of your rummaging carries. Something answers it.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
-      UI.tapToContinue(()=>Game.resume());
-    } else {
-      await UI.type('Picked clean. Whoever came before you wasn\'t gentle.','dim');
-      if(chance(40+S.danger*2)){ await UI.type('And you\'re not alone in the ruins.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
-      UI.tapToContinue(()=>Game.resume());
-    }
-  },
-
-  /* ---- rest & repair (safe in settlements, risky in the wild) ---- */
-  async rest(){
-    // A deliberate Camp node is a defended stop; ambush only if the horde is close.
-    const safe = !(S.node && S.node.type!=='camp') ? true : false;
-    UI.clear();
-    UI.art('camp','amber');
-    UI.speaker(safe?'FORTIFIED CAMP':'MAKESHIFT CAMP','sys');
-    await UI.type(safe
-      ? 'You pull off into a defensible spot, post the car across the gap, and finally let your guard down.'
-      : 'You find a rough spot and stop to patch yourself and the car.');
-    const rate = safe?0.55:0.35;
-    const heal = Math.round(S.surv.maxHp*rate);
-    const fix = Math.round(S.veh.maxInteg*(safe?0.45:0.30));
-    S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+heal);
-    S.veh.integ=Math.min(S.veh.maxInteg,S.veh.integ+fix);
-    await UI.type('You bind your wounds (+'+heal+' HP) and hammer out the worst of the dents (+'+fix+' integrity).','good');
-    UI.hud();
-    if(!safe && chance(40+S.danger*3)){ await UI.type('But rest in the open is a luxury, and the dead collect on luxuries.','bad'); return UI.tapToContinue(()=>Game.combat(false)); }
-    await UI.type(safe?'The night passes behind the walls, quiet and whole.':'The night passes, somehow, quiet.','dim');
-    UI.tapToContinue(()=>Game.resume());
-  },
-
-  /* ---- garage (found or chosen) ---- */
-  async findGarage(){
-    UI.clear();
-    UI.art('garage','amber');
-    UI.speaker('ABANDONED GARAGE','sys');
-    await UI.type('A repair shop, lights dead but the lift still works by hand. A place to make your ride meaner.');
-    UI.tapToContinue(()=>Game.garage(true));
-  },
-  garage(found){
-    UI.clear();
-    UI.art('garage','amber');
-    UI.speaker('GARAGE // VEHICLE MODS','sys');
-    UI.add('Bolt parts onto <b>'+S.veh.name+'</b>. Scrap on hand: <b>'+S.scrap+' ⛭</b>','dim');
-    // offer 3 vehicle upgrades, priced by rarity & gearhead discount
-    const offers = Game.rollOffers(VEH_UPGRADES, S.veh.mods, 3);
-    const disc = S.surv.perk==='gearhead'?0.75:1;
-    const opts = offers.map((u,i)=>{
-      const cost = Math.round((10 + u.rare*12 + S.miles) * disc);
-      return { key:i+1, cls:'pickup', cost:cost+' ⛭',
-        disabled:S.scrap<cost,
-        label:`<b>${u.name}</b><br><span class="small">${u.desc}</span>`,
-        fn:()=>{ S.scrap-=cost; u.apply(S); if(!u.repeatable)S.veh.mods.push(u.id); UI.toast('Installed: '+u.name,'blue'); save(); Game.garage(found); } };
-    });
-    // repair option
-    const repairCost = Math.ceil((S.veh.maxInteg-S.veh.integ)/4);
-    if(S.veh.integ<S.veh.maxInteg) opts.push({ key:'R', cost:repairCost+' ⛭', disabled:S.scrap<repairCost||repairCost===0,
-      label:'<b>Full repair</b><br><span class="small">restore integrity to max</span>',
-      fn:()=>{ S.scrap-=repairCost; S.veh.integ=S.veh.maxInteg; UI.toast('Repaired','blue'); save(); Game.garage(found); } });
-    opts.push({ key:'▸', label:'Back to the road', fn:()=>Game.resume() });
-    UI.setChoices(opts);
-  },
-
-  /* ---- roll N distinct upgrade offers, respecting taken/repeatable ---- */
-  rollOffers(pool, taken, n){
-    let avail = pool.filter(u=>u.repeatable || !taken.includes(u.id));
-    // weight by rarity (rarer = less common)
-    const out=[];
-    const bag=[];
-    avail.forEach(u=>{ const w = u.rare===1?5:u.rare===2?3:1; for(let i=0;i<w;i++)bag.push(u); });
-    while(out.length<n && bag.length){
-      const u=bag.splice(rnd(bag.length),1)[0];
-      if(!out.includes(u)) out.push(u);
-    }
-    // fall back to procedural endless boosts if pool exhausted
-    while(out.length<n){ out.push(Game.procUpgrade(pool===VEH_UPGRADES)); }
-    return out;
-  },
-
-  // endless procedurally-scaling boost so upgrades never run out
-  procUpgrade(isVeh){
-    const tier = 1 + Math.floor(S.miles/15);
-    if(isVeh){
-      const k = pick(['armor','ram','speed','integ']);
-      const amt = tier + rnd(tier+1);
-      const map={armor:['Field Plating','+'+amt+' armor',s=>s.veh.armor+=amt],
-                 ram:['Scrap Spikes','+'+(amt*2)+' ram',s=>s.veh.ram+=amt*2],
-                 speed:['Stripped Frame','+'+amt+' speed',s=>s.veh.speed+=amt],
-                 integ:['Patch Welds','+'+(amt*6)+' max integ',s=>{s.veh.maxInteg+=amt*6;s.veh.integ+=amt*6;}]};
-      return { id:'proc', name:map[k][0]+' '+tier, desc:map[k][1], rare:1, repeatable:true, apply:map[k][2] };
-    } else {
-      const k = pick(['atk','def','hp','agi']);
-      const amt = tier + rnd(tier+1);
-      const map={atk:['Sharpened Edge','+'+amt+' attack',s=>s.surv.atk+=amt],
-                 def:['Scrap Armor','+'+amt+' defense',s=>s.surv.def+=amt],
-                 hp:['Hard Living','+'+(amt*5)+' max HP',s=>{s.surv.maxHp+=amt*5;s.surv.hp+=amt*5;}],
-                 agi:['Wiry','+'+amt+' agility',s=>s.surv.agi+=amt]};
-      return { id:'proc', name:map[k][0]+' '+tier, desc:map[k][1], rare:1, repeatable:true, apply:map[k][2] };
-    }
-  },
-
-  /* ===================== COMBAT ===================== */
-  // The Mutation Clock: rises with act depth (and hard in endless mode).
-  mutTier(){ if(!S) return 0; return Math.min(9, (S.act-1)*2 + Math.floor(S.stage/2) + (S.endless?2:0)); },
-
-  mkFoe(tpl, scale, bonusHp){
-    const hp = Math.round(tpl.base.hp*scale) + (bonusHp||0) + (tpl.elite?40:0);
-    return { tpl, name:tpl.name, hp, maxHp:hp,
-      atk:Math.round(tpl.base.atk*scale), agi:tpl.base.agi,
-      pierce:!!tpl.pierce, ambush:!!tpl.ambush, summon:!!tpl.summon,
-      evasion:tpl.evasion||0, explode:tpl.explode||0, elite:!!tpl.elite, exploded:false };
-  },
-
-  combat(boss, opts){
-    if(!S || S.over) return;
-    opts = opts || {};
-    const mt = Game.mutTier();
-    const scale = 1 + S.danger*0.16 + mt*0.05;
-    // Faction patrol — human enemies, not the dead.
-    if(opts.patrol){
-      const sol = FACTION_INFO[opts.patrol].soldier;
-      const pn = 1 + rnd(2) + Math.floor(S.danger/4);
-      const pfoes=[]; const pb={xp:0,scrap:0};
-      for(let i=0;i<pn;i++){ pfoes.push(Game.mkFoe(sol, scale, 0)); pb.xp+=sol.xp; pb.scrap+=sol.scrap; }
-      Game._cb = { foes:pfoes, boss:false, turn:1, summonsLeft:0, bounty:pb, mt, scale, patrol:opts.patrol, human:true, quest:null };
-      return Game.combatIntro();
-    }
-    const isBoss = boss || opts.boss || opts.assault;
-    const eScale = scale * (opts.elite?1.5:1);
-    const pool = ZOMBIES.filter(z=>!z.elite && z.tier<=mt);
-    const n = isBoss ? 3+rnd(3)+Math.floor(mt/3) : opts.elite ? 1+rnd(2) : 1+rnd(Math.min(4,1+Math.floor(S.danger/2)));
-    // adaptation: the dead lean toward whatever counters your habits
-    const ramHeavy   = S.tactics.ram   > S.tactics.melee + 3;
-    const meleeHeavy = S.tactics.melee > S.tactics.ram   + 3;
-    const foes=[]; const bounty={xp:0,scrap:0};
-    for(let i=0;i<n;i++){
-      let tpl;
-      if(isBoss && i===0){
-        tpl = (mt>=4 && chance(70)) ? ZOMBIES.find(z=>z.id==='tyrant') : ZOMBIES.find(z=>z.id==='brute');
-      } else if(opts.elite && i===0){
-        // an elite: a strong strain, beefed up
-        tpl = pick(ZOMBIES.filter(z=>!z.elite && z.tier<=Math.max(2,mt)));
-      } else {
-        const bag=[];
-        pool.forEach(z=>{
-          let w = Math.max(1, 4 - z.tier);
-          if(ramHeavy   && (z.id==='brute'||z.id==='bloater')) w+=3;  // punish ram-spam
-          if(meleeHeavy && (z.id==='runner'||z.id==='stalker')) w+=3; // punish melee-spam
-          for(let k=0;k<w;k++) bag.push(z);
-        });
-        tpl = bag.length ? pick(bag) : ZOMBIES[0];
-      }
-      const f = Game.mkFoe(tpl, (opts.elite&&i===0)?eScale:scale, isBoss?20:0);
-      if(opts.elite && i===0){ f.elite=true; f.name='Elite '+f.name; f.hp=Math.round(f.hp*1.6); f.maxHp=f.hp; }
-      foes.push(f);
-      bounty.xp += tpl.xp * ((opts.elite&&i===0)?2:1); bounty.scrap += tpl.scrap * ((opts.elite&&i===0)?2:1);
-    }
-    Game._cb = { foes, boss:isBoss, elite:!!opts.elite, assault:!!opts.assault, turn:1, summonsLeft:3+mt, bounty, mt, scale, quest:opts.quest||null };
-    Game.combatIntro();
-  },
-
-  async combatIntro(){
-    const cb=Game._cb;
-    UI.clear();
-    UI.art(cb.boss?'horde':cb.foes[0].tpl.art, cb.foes[0].tpl.col || (cb.boss?'red':''));
-    if(cb.patrol){
-      UI.speaker(FACTION_INFO[cb.patrol].name.toUpperCase()+' PATROL','enemy');
-      await UI.type('Headlights flare across the road — '+cb.foes.length+' of '+FACTION_INFO[cb.patrol].name+'\'s killers, and they\'ve marked your colours. No talking your way out of this one.');
-    } else {
-      UI.speaker(cb.boss?'THE HORDE':'CONTACT','enemy');
-      await UI.type(cb.boss
-        ? 'They come from everywhere at once — '+cb.foes.length+' of them, and one big enough to block out the sky.'
-        : (cb.foes.length>1?cb.foes.length+' of them peel off a wreck and come for you.':'A '+cb.foes[0].name+' fixes on you and charges.'));
-    }
-
-    // Telegraph any strain you've never seen before — escalating dread.
-    const fresh=[];
-    for(const f of cb.foes){ if(f.tpl.telegraph && !S.seenStrains.includes(f.tpl.id)){ S.seenStrains.push(f.tpl.id); fresh.push(f.tpl); } }
-    if(fresh.length){
-      save();
-      for(const t of fresh){ UI.speaker('⚠ NEW STRAIN','enemy'); await UI.type(t.telegraph,'warn'); }
-    }
-
-    // Lurkers ambush before the first turn.
-    const lurkers=cb.foes.filter(f=>f.ambush);
-    if(lurkers.length){
-      UI.speaker('AMBUSH!','enemy');
-      for(const f of lurkers){
-        if(S.surv.dodge && chance(S.surv.dodge)){ await UI.type('A '+f.name+' bursts from cover — but you slip aside.','dim'); continue; }
-        const def = S.surv.def + (S.surv.perk==='tough'?1:0);
-        const taken = Math.max(1, f.atk+rnd(3)-def);
-        S.surv.hp = Math.max(0, S.surv.hp-taken);
-        await UI.type('A '+f.name+' lunges from hiding — <b>'+taken+'</b> damage before you can raise your guard!','bad');
-      }
-      UI.hud();
-      if(S.surv.hp<=0) return UI.tapToContinue(()=>Game.death());
-    }
-    Game.combatTurn();
-  },
-
-  combatTurn(){
-    const cb=Game._cb;
-    if(S.surv.hp<=0 || S.veh.integ<=0) return Game.death();
-    if(cb.foes.length===0) return Game.victory();
-    UI.clear();
-    // enemy roster
-    UI.speaker('THREATS · mutation tier '+cb.mt,'enemy');
-    cb.foes.forEach((f,i)=>{
-      const tags=[];
-      if(f.pierce)tags.push('pierces armour');
-      if(f.summon)tags.push('summons');
-      if(f.evasion)tags.push('evasive');
-      if(f.explode)tags.push('explodes');
-      if(f.elite)tags.push('ELITE');
-      UI.add(`<span class="small">[${i+1}]</span> <b>${f.name}</b> &nbsp;HP ${f.hp}/${f.maxHp} &nbsp;<span class="small">atk ${f.atk}${tags.length?' · '+tags.join(', '):''}</span>`, 'bad');
-    });
-    UI.rule();
-    UI.add(`<span class="small">YOU ${S.surv.hp}/${S.surv.maxHp} HP ✚ &nbsp;|&nbsp; ${S.veh.name} ${S.veh.integ}/${S.veh.maxInteg} ⚙</span>`);
-
-    const opts=[
-      { key:'⚔', label:'MELEE the nearest <span class="small">— your attack '+Game.survDmgText()+'</span>', fn:()=>Game.playerMelee(0) },
-      { key:'⊕', label:'RAM with the '+S.veh.name+' <span class="small">— hits hard, takes damage</span>', fn:()=>Game.playerRam() },
-    ];
-    if(cb.foes.length>1){
-      opts[0].label='MELEE a target <span class="small">— pick who</span>';
-      opts[0].fn=()=>Game.chooseTarget(t=>Game.playerMelee(t));
-    }
-    if(S.inv.medkits>0) opts.push({ key:'✚', cls:'pickup', label:'Use medkit <span class="small">— heal ~40%</span>',
-      fn:()=>{ S.inv.medkits--; const h=Math.round(S.surv.maxHp*0.4); S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); UI.toast('+'+h+' HP','red'); Game.enemyPhase('You patch yourself mid-fight (+'+h+' HP).'); } });
-    opts.push({ key:'⤺', cls:'danger', label:'FLOOR IT — try to escape <span class="small">— speed vs the swarm</span>', fn:()=>Game.flee() });
-    UI.setChoices(opts);
-  },
-
-  survDmgText(){ const lo=S.surv.atk, hi=S.surv.atk+5; return lo+'–'+hi; },
-
-  chooseTarget(then){
-    const cb=Game._cb;
-    UI.setChoices(cb.foes.map((f,i)=>({ key:i+1, cls:'danger',
-      label:`Strike <b>${f.name}</b> <span class="small">(${f.hp} HP)</span>`,
-      fn:()=>then(i) })).concat([{key:'↩',label:'back',fn:()=>Game.combatTurn()}]));
-  },
-
-  rollSurvDamage(){
-    let dmg = S.surv.atk + rnd(6) + (S.ally==='reaper'?3:0); // Reaper gear
-    let crit=false;
-    if(chance(S.surv.crit)){ dmg=Math.round(dmg*2); crit=true; }
-    if(S.surv.flags.berserk && S.surv.hp < S.surv.maxHp/3) dmg=Math.round(dmg*1.6);
-    if(S.relics.includes('glass_cannon')) dmg=Math.round(dmg*1.6); // Glass Cannon
-    return {dmg,crit};
-  },
-
-  async playerMelee(ti){
-    const cb=Game._cb; const f=cb.foes[ti]; if(!f) return Game.combatTurn();
-    S.tactics.melee++;
-    UI.clear();
-    UI.speaker('YOU','');
-    // Stalkers and other evasive strains can slip your blade.
-    if(f.evasion && chance(f.evasion)){
-      await UI.type('You swing hard — but the '+f.name+' simply isn\'t where it was. Nothing but air.','dim');
-      return Game.afterPlayerAction();
-    }
-    const {dmg,crit}=Game.rollSurvDamage();
-    const canExec = (S.surv.flags.execute && f.hp<=f.maxHp*0.18) || (S.relics.includes('reapers_favor') && !f.elite && f.hp<=f.maxHp*0.25);
-    if(canExec){
-      f.hp=0;
-      await UI.type('You drive your blade through its skull — <b>execution</b>. It drops instantly.','good');
-    } else {
-      f.hp-=dmg;
-      await UI.type((crit?'<b>CRITICAL!</b> ':'')+'You smash the '+f.name+' for <b>'+dmg+'</b>.'+(crit?' Bone gives.':''),'good');
-      if(S.surv.flags.lifesteal){ const h=Math.round(dmg*0.2); S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); if(h>0)UI.toast('+'+h+' HP','red'); }
-    }
-    Game.afterPlayerAction();
-  },
-
-  async playerRam(){
-    const cb=Game._cb;
-    S.tactics.ram++;
-    let dmg = S.veh.ram + rnd(6) + (S.veh.flags.plow?S.veh.speed:0) + (S.ally==='reaper'?4:0);
-    if(S.relics.includes('glass_cannon')) dmg=Math.round(dmg*1.6);
-    UI.clear();
-    UI.speaker(S.veh.name,'');
-    const f=cb.foes[0];
-    f.hp-=dmg;
-    await UI.type('You gun it and slam the '+f.name+' for <b>'+dmg+'</b>. Wet crunch of impact.','good');
-    if(S.veh.flags.flamer){ cb.foes.forEach(z=>{ if(z!==f){ z.hp-=4+rnd(5); } }); await UI.type('Flame jets wash over the rest of the pack.','warn'); }
-    const nitroChance = (S.veh.flags.nitro?25:0) + (S.relics.includes('nitro_saint')?40:0);
-    if(nitroChance && chance(nitroChance)){ const d2=Math.round(dmg*0.6); f.hp-=d2; await UI.type('The ram strikes <b>twice</b> — another '+d2+'!','warn'); }
-    const recoil=Math.max(0, 2+rnd(4) - Math.floor(S.veh.armor/2));
-    if(recoil>0){ S.veh.integ=Math.max(0,S.veh.integ-recoil); await UI.type('The hit rattles your ride. <span class="small">−'+recoil+' integrity</span>','dim'); }
-    Game.afterPlayerAction();
-  },
-
-  async afterPlayerAction(){
-    const cb=Game._cb;
-    // passive roof turret picks a living target
-    if(S.veh.turret>0){ const t=cb.foes.find(z=>z.hp>0); if(t){ t.hp-=S.veh.turret; UI.add('Roof turret stitches the '+t.name+' for '+S.veh.turret+'.','dim'); } }
-    await Game.resolveDeaths();
-    UI.hud();
-    if(S.surv.hp<=0 || S.veh.integ<=0) return UI.tapToContinue(()=>Game.death());
-    if(cb.foes.length===0) return UI.tapToContinue(()=>Game.victory());
-    UI.tapToContinue(()=>Game.enemyPhase());
-  },
-
-  // Remove the dead — but Bloaters erupt on the way out.
-  async resolveDeaths(){
-    const cb=Game._cb;
-    for(const f of cb.foes){
-      if(f.hp<=0 && f.explode && !f.exploded){
-        f.exploded=true;
-        const blast=f.explode+rnd(6);
-        const sd=Math.max(1, blast-Math.floor(S.surv.def/2));
-        const vd=Math.max(0, blast-S.veh.armor);
-        S.surv.hp=Math.max(0,S.surv.hp-sd);
-        S.veh.integ=Math.max(0,S.veh.integ-vd);
-        cb.foes.forEach(z=>{ if(z!==f && z.hp>0) z.hp-=Math.round(blast/2); });
-        UI.speaker('⚠ ERUPTION','enemy');
-        await UI.type('The '+f.name+' bursts in a gout of acid and bone — <b>'+sd+'</b> to you, <b>'+vd+'</b> to the '+S.veh.name+', and it splashes the pack around it.','bad');
-      }
-    }
-    const dead=cb.foes.filter(z=>z.hp<=0);
-    if(dead.length){
-      UI.add(dead.map(z=>z.name).join(', ')+(dead.length>1?' go down.':' goes down.'),'dim');
-      S.run.kills += dead.length;
-      if(S.relics.includes('blood_engine')){ const h=dead.length*2; S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); }
-      if(S.relics.includes('vulture')){ S.scrap += dead.length*3; }
-    }
-    cb.foes = cb.foes.filter(z=>z.hp>0);
-  },
-
-  async enemyPhase(pre){
-    const cb=Game._cb;
-    UI.clear();
-    UI.speaker('THE DEAD','enemy');
-    if(pre) UI.add(pre,'dim');
-    // survivor regen
-    if(S.surv.regen>0 && S.surv.hp<S.surv.maxHp){ S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+S.surv.regen); }
-    // screamers drag more dead into the fight
-    const screamers=cb.foes.filter(f=>f.summon);
-    if(screamers.length && cb.summonsLeft>0 && cb.foes.length<8){
-      const w=ZOMBIES.find(z=>z.id==='walker');
-      let summoned=0;
-      for(const s of screamers){
-        if(cb.summonsLeft<=0 || cb.foes.length>=8) break;
-        cb.summonsLeft--; summoned++;
-        const nf=Game.mkFoe(w, cb.scale, 0);
-        cb.foes.push(nf); cb.bounty.xp+=w.xp; cb.bounty.scrap+=w.scrap;
-      }
-      if(summoned) await UI.type('A Screamer\'s shriek splits the air — '+summoned+' more dead claw out of the dark to answer it!','bad');
-    }
-    // allied-faction backup
-    if(S.ally && cb.foes.length){
-      const t=cb.foes[0];
-      if(S.ally==='convoy'){ const d=8+S.danger; t.hp-=d; UI.add('A Convoy gun-truck roars past and rakes the '+t.name+' for '+d+'.','dim'); }
-      else if(S.ally==='reaper'){ const d=6+rnd(6); t.hp-=d; UI.add('Your Reaper escort buries a cleaver in the '+t.name+' for '+d+'.','dim'); }
-      else if(S.ally==='remnant'){ if(S.surv.hp<S.surv.maxHp){ const h=5; S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); UI.add('A Remnant serum steadies you. <span class="small">+'+h+' HP</span>','dim'); } }
-      await Game.resolveDeaths();
-      UI.hud();
-      if(S.surv.hp<=0 || S.veh.integ<=0) return UI.tapToContinue(()=>Game.death());
-      if(cb.foes.length===0) return UI.tapToContinue(()=>Game.victory());
-    }
-    let guardReady = (S.ally==='haven'); // Haven marksmen blunt the first blow
-    for(const f of cb.foes){
-      if(S.surv.hp<=0||S.veh.integ<=0) break;
-      // dodge?
-      if(S.surv.dodge && chance(S.surv.dodge)){ await UI.type('You twist aside — the '+f.name+'\'s lunge finds nothing.','dim'); continue; }
-      // target: mostly survivor, sometimes vehicle
-      const atVeh = chance(35);
-      let dmg = f.atk + rnd(3);
-      if(atVeh){
-        const armor = f.pierce?0:S.veh.armor;
-        const taken=Math.max(1,dmg-armor);
-        S.veh.integ=Math.max(0,S.veh.integ-taken);
-        let extra='';
-        if(S.relics.includes('razor_hull')){ f.hp-=4; extra=' The razor hull bites back — 4 to it.'; }
-        await UI.type('The '+f.name+' claws into the '+S.veh.name+'. <span class="small">−'+taken+' integrity</span>'+extra,'bad');
-      } else {
-        let def = S.surv.def + (S.surv.perk==='tough'?1:0);
-        if(f.pierce) def=Math.floor(def/2);
-        let taken=Math.max(1,dmg-def);
-        if(guardReady){ const blunted=Math.max(0,Math.floor(taken/2)); guardReady=false; UI.add('Haven marksmen stitch the '+f.name+' mid-lunge — the blow lands half-spent.','dim'); taken=blunted; }
-        S.surv.hp=Math.max(0,S.surv.hp-taken);
-        await UI.type('The '+f.name+' tears into you. <span class="small">−'+taken+' HP</span>','bad');
-      }
-    }
-    UI.hud();
-    if(S.surv.hp<=0||S.veh.integ<=0) return UI.tapToContinue(()=>Game.death());
-    Game._cb.turn++;
-    UI.tapToContinue(()=>Game.combatTurn());
-  },
-
-  async flee(){
-    const cb=Game._cb;
-    UI.clear();
-    UI.speaker('ESCAPE','sys');
-    const fastest=Math.max(...cb.foes.map(f=>f.agi));
-    const mine=S.surv.agi + Math.floor(S.veh.speed/2) + rnd(6);
-    if(mine > fastest+2 || S.fuel<2 && chance(40)){
-      await UI.type('You break contact, fishtail onto open road, and leave them clawing at your dust.','good');
-      // small fuel cost
-      S.fuel=Math.max(0,S.fuel-3); UI.hud();
-      UI.tapToContinue(()=>Game.resume('Heart pounding, you put miles between you and them.'));
-    } else {
-      await UI.type('Too slow — they swarm the car before you can build speed. One free swipe each.','bad');
-      // enemies get a free hit, then back to combat
-      for(const f of cb.foes){ const taken=Math.max(1,f.atk-S.surv.def); S.surv.hp=Math.max(0,S.surv.hp-taken); }
-      UI.hud();
-      if(S.surv.hp<=0) return UI.tapToContinue(()=>Game.death());
-      UI.tapToContinue(()=>Game.combatTurn());
-    }
-  },
-
-  async victory(){
-    const cb=Game._cb;
-    if(S.surv.hp<=0 || S.veh.integ<=0) return Game.death(); // never "win" already dead
-    // run counters
-    if(cb.elite) S.run.elites++;
-    if(cb.boss && !cb.assault) S.run.bosses++;
-    if(cb.assault){ S.lead=Math.max(S.lead,3); }
-    UI.clear();
-    UI.art(cb.boss?'sun':'skull', cb.boss?'amber':'dim');
-    UI.speaker(cb.assault?'BROKE THROUGH':cb.boss?'BOSS DOWN':cb.elite?'ELITE SLAIN':'CLEARED','sys');
-    // rewards scale with the bounty of everything that turned up (summons included)
-    const bounty = cb.bounty || {xp:8,scrap:5};
-    const xpMult = (1 + S.danger*0.05) * (S.ally==='remnant'?1.25:1); // Remnant study bonus
-    const xp = Math.round(bounty.xp * xpMult) + rnd(6);
-    const scrap = Math.round(bounty.scrap * (1 + S.danger*0.04)) + S.surv.scav*2 + rnd(4);
-    S.surv.xp += xp; S.scrap += scrap;
-    await UI.type(cb.patrol
-      ? 'The last of '+FACTION_INFO[cb.patrol].name+'\'s patrol drops. Costly enemies to make. <span class="small">+'+xp+' XP · +'+scrap+' scrap</span>'
-      : 'The last of them stops twitching. You\'re still breathing. <span class="small">+'+xp+' XP · +'+scrap+' scrap</span>','good');
-    // faction job complete — standing reward
-    if(cb.quest && (cb.quest in FACTION_INFO)){
-      addRep(cb.quest, 20);
-      const bonus = 10 + S.danger;
-      S.scrap += bonus;
-      await UI.type('Job done for '+FACTION_INFO[cb.quest].name+'. They won\'t forget it. <span class="small">+20 standing · +'+bonus+' scrap</span>','loot');
-    }
-    // second wind
-    if(S.surv.flags.secondWind){ const h=Math.round(S.surv.maxHp*0.18); S.surv.hp=Math.min(S.surv.maxHp,S.surv.hp+h); UI.toast('Second Wind +'+h+' HP','red'); }
-    // vehicle autorepair
-    if(S.veh.autorepair>0){ S.veh.integ=Math.min(S.veh.maxInteg,S.veh.integ+S.veh.autorepair); UI.toast('Repair Rig +'+S.veh.autorepair,'blue'); }
-    // drop chance
-    if(chance(30)){ S.inv.medkits++; UI.add('You loot a medkit from the bodies. <span class="small">+1 ✚</span>','loot'); }
-    if(chance(20)){ S.inv.fuelcans++; UI.add('One of them died clutching a fuel can. <span class="small">+1 ⛽-can</span>','loot'); }
-    UI.hud(); save();
-    // level up?
-    if(S.surv.xp >= S.surv.xpNext){ return UI.tapToContinue(()=>Game.levelUp()); }
-    UI.tapToContinue(()=>Game.resume());
-  },
-
-  levelUp(){
-    while(S.surv.xp>=S.surv.xpNext){ S.surv.xp-=S.surv.xpNext; S.surv.level++; S.surv.xpNext=Math.round(S.surv.xpNext*1.35+10); }
-    S.surv.maxHp+=4; S.surv.hp=S.surv.maxHp; // small base bump + full heal on level
-    UI.clear();
-    UI.art('sun','amber');
-    UI.speaker('LEVEL UP — LV '+S.surv.level,'sys');
-    UI.add('You\'re sharper, harder, harder to kill. (+4 max HP, fully healed) Choose what hardens next:','good');
-    let offers = Game.rollOffers(SURV_UPGRADES, S.surv.mods, 3);
-    const render=()=>{
-      UI.setChoices(offers.map((u,i)=>({
-        key:i+1, cls:'pickup',
-        label:`<b>${u.name}</b><br><span class="small">${u.desc}</span>`,
-        fn:()=>{ u.apply(S); if(!u.repeatable)S.surv.mods.push(u.id); UI.toast('Learned: '+u.name,'red'); save(); Game.resume('Stronger now. The road waits.'); }
-      })).concat(
-        S.surv.perk==='lucky' && !Game._rerolled ? [{key:'↻',cls:'danger',label:'Reroll choices <span class="small">(Lucky)</span>',fn:()=>{ Game._rerolled=true; offers=Game.rollOffers(SURV_UPGRADES,S.surv.mods,3); render(); }}] : []
-      ));
-    };
-    Game._rerolled=false;
-    render();
-  },
-
-  death(){
-    if(!S) return;
-    // Phoenix Cell relic — cheat death once per run.
-    if(S.relics.includes('phoenix') && !S._phoenixUsed){
-      S._phoenixUsed=true; S._inBoss=false; S._pendingRelic=false;
-      S.surv.hp=Math.max(1,Math.round(S.surv.maxHp*0.3));
-      S.veh.integ=Math.max(1,Math.round(S.veh.maxInteg*0.3));
-      UI.clear(); UI.art('sun','amber'); UI.speaker('PHOENIX CELL','sys');
-      UI.add('Your heart stops — then the cell jolts it back. You tear free of the swarm and live.','good');
-      UI.hud(); save();
-      UI.tapToContinue(()=>Game.advanceRoute('You broke away, barely.'));
-      return;
-    }
-    S.over=true;
-    UI.clear(); UI.art('carWreck','red'); UI.speaker('THE ROAD ENDS','enemy');
-    UI.add(S.surv.hp<=0
-      ? 'They drag you out through the broken window. You don\'t feel the last of it.'
-      : 'The engine dies with a final cough, and the dead close over the '+S.veh.name+' like water.','bad');
-    UI.tapToContinue(()=>Game.runEnd(false));
-  },
-};
-
-/* ----------------------------- BOOT ------------------------------------ */
-window.addEventListener('load', ()=>{ UI.init(); Game.title(); });
-// keyboard support for desktop testing (1-9, space/enter to continue)
-window.addEventListener('keydown', (e)=>{
-  if(UI.typing && (e.key===' '||e.key==='Enter')){ UI.sceneTap(); e.preventDefault(); return; }
-  const btns=document.querySelectorAll('#choices .choice');
-  if(/^[1-9]$/.test(e.key)){ const b=btns[parseInt(e.key)-1]; if(b)b.click(); }
-  if((e.key===' '||e.key==='Enter') && btns.length===1){ btns[0].click(); e.preventDefault(); }
+/* ================================ INPUT ================================== */
+document.addEventListener('click',(e)=>{
+  const b=e.target.closest('[data-cmd]'); if(!b) return;
+  if(b.disabled) return;
+  act(b.getAttribute('data-cmd'));
 });
+const KEY={ ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',
+  w:'u',s:'d',a:'l',d:'r',
+  h:'l',j:'d',k:'u',l:'r',y:'ul',u:'ur',b:'dl',n:'dr',
+  '.':'center',' ':'center',g:'center',Enter:'center',
+  i:'inv',z:'cast',c:'cast',r:'rest','>':'stairs','<':'stairs','@':'char' };
+document.addEventListener('keydown',(e)=>{
+  if(S&&S.mode!=='play') return;
+  let k=e.key; const cmd=KEY[k]!==undefined?KEY[k]:(KEY[k.toLowerCase()]);
+  if(cmd){ e.preventDefault(); act(cmd); }
+});
+window.addEventListener('resize',()=>{ if(S&&S.p&&S.mode==='play'){ const m=$('map'); m._cell=0; sizeMap(); render(); } });
+
+/* ================================= BOOT ================================== */
+window.__ABYSS={ get S(){return S;}, act, beginGame, _cre, createPlayer, buildLevel, newState };
+titleScreen();
 </script>
 </body>
 </html>
