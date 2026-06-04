@@ -1,0 +1,39 @@
+name: Deploy RIFTBOUND to GitHub Pages
+
+# Publishes ONLY riftbound.html to the existing `gh-pages` branch without
+# disturbing whatever else is already there (keep_files: true). This means
+# the currently-live site at the root is preserved, and RIFTBOUND becomes
+# available at:  <pages-url>/riftbound.html
+
+on:
+  push:
+    branches: ["claude/standalone-game-hhPHW"]
+    paths: ["riftbound.html", ".github/workflows/deploy-riftbound.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: "riftbound-pages"
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Stage game
+        run: |
+          mkdir -p _site
+          cp riftbound.html _site/riftbound.html
+
+      - name: Publish to gh-pages (additive)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          publish_branch: gh-pages
+          keep_files: true
