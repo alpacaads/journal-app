@@ -84,6 +84,7 @@
       <span class="pill">DLvl <b id="hDepth">1</b></span>
       <span class="pill">CLvl <b id="hClvl">1</b></span>
       <span class="pill">$<b id="hGold">0</b></span>
+      <span class="pill" id="hCorrPill" style="display:none">Chaos <b id="hCorr">0</b></span>
     </div>
     <div class="hudrow" style="margin-top:3px">
       <div class="bar"><i id="hpBar" style="background:var(--hp);width:100%"></i><span id="hpTxt">HP</span></div>
@@ -180,6 +181,63 @@ const CLASSES = [
     mod:{str:0,dex:3,tou:0,wil:1,per:2} },
 ];
 
+// Class powers — passive abilities granted at level milestones (ADOM-style class powers).
+const POWERS={
+  fighter:[ {lvl:1, id:'weapon_master',  name:'Weapon Master', desc:'+1 melee damage for every 4 levels.'},
+            {lvl:6, id:'second_wind',    name:'Second Wind',   desc:'Heal 25% of your HP whenever you kill a foe.'},
+            {lvl:12,id:'cleave',         name:'Cleave',        desc:'Your blows may carry into a second adjacent enemy.'} ],
+  wizard: [ {lvl:1, id:'arcane_font',    name:'Arcane Font',   desc:'Regenerate mana much faster.'},
+            {lvl:6, id:'spell_power',    name:'Spell Power',   desc:'+3 damage to all damaging spells.'},
+            {lvl:12,id:'pyromancer',     name:'Pyromancer',    desc:'Fireball costs 3 less mana.'} ],
+  ranger: [ {lvl:1, id:'keen_eye',       name:'Keen Eye',      desc:'+1 accuracy and +1 sight radius.'},
+            {lvl:6, id:'deadly_precision',name:'Deadly Precision',desc:'+8% critical hit chance.'},
+            {lvl:12,id:'survivor',       name:'Survivor',      desc:'Regenerate HP faster.'} ],
+  thief:  [ {lvl:1, id:'backstab',       name:'Backstab',      desc:'Deal massive damage to unaware foes.'},
+            {lvl:6, id:'fortune',        name:"Fortune's Favor",desc:'+1 loot found and +6% dodge.'},
+            {lvl:12,id:'shadowstep',     name:'Shadowstep',    desc:'After a kill, you may melt into the shadows.'} ],
+};
+function allPowers(){ const r=[]; for(const k in POWERS) r.push(...POWERS[k]); return r; }
+function powerById(id){ return allPowers().find(p=>p.id===id); }
+
+// Talents — chosen by the player every couple of levels. Stackable.
+const TALENT_LEVELS=2; // a talent pick every N character levels
+const TALENTS=[
+  { id:'might',     name:'Might',             desc:'+2 Strength',                 apply:p=>{p.attr.str+=2;} },
+  { id:'agility',   name:'Agility',           desc:'+2 Dexterity',                apply:p=>{p.attr.dex+=2;} },
+  { id:'hardy',     name:'Hardiness',         desc:'+2 Toughness',                apply:p=>{p.attr.tou+=2;} },
+  { id:'attuned',   name:'Attunement',        desc:'+2 Willpower',                apply:p=>{p.attr.wil+=2;} },
+  { id:'keen',      name:'Keen Senses',       desc:'+2 Perception (more sight)',  apply:p=>{p.attr.per+=2;} },
+  { id:'toughness', name:'Iron Constitution', desc:'+10 maximum HP',              apply:p=>{p.bonHP+=10;} },
+  { id:'precision', name:'Precision',         desc:'+3 accuracy',                 apply:p=>{p.bonAcc+=3;} },
+  { id:'deadly',    name:'Deadly Aim',        desc:'+6% critical chance',         apply:p=>{p.bonCrit+=6;} },
+  { id:'evasion',   name:'Evasion',           desc:'+8% chance to dodge attacks', apply:p=>{p.dodge+=8;} },
+  { id:'regener',   name:'Fast Healer',       desc:'Regenerate HP faster',        apply:p=>{p.bonRegen+=1;} },
+  { id:'ironguts',  name:'Iron Guts',         desc:'Take half damage from poison', apply:p=>{p.poisonRes=1;} },
+  { id:'treasure',  name:'Treasure Sense',    desc:'Find more loot',              apply:p=>{p.find=(p.find||0)+1;} },
+  { id:'spellcraft',name:'Spellcraft', caster:1, desc:'+2 spell power, +6 max mana', apply:p=>{p.spellPow+=2; p.bonMP+=6;} },
+];
+
+// Corruption — the signature ADOM mechanic. It rises as you delve and from
+// chaos-touched foes; each threshold warps your body with a mutation.
+const CORR_PER_MUT=100;
+const MUTATIONS=[
+  { id:'claws',   good:1, name:'Chaos Claws',  desc:'Wicked claws sprout from your hands. +3 melee damage.' },
+  { id:'scales',  good:1, name:'Scaled Hide',  desc:'Hardened scales sheathe you. +2 armor class.' },
+  { id:'brawn',   good:1, name:'Brute Muscle', desc:'Your sinews swell. +2 Strength.', apply:p=>{p.attr.str+=2;} },
+  { id:'eyes',    good:1, name:'Night Eyes',   desc:'Your eyes adapt to the dark. +2 sight radius.' },
+  { id:'mregen',  good:1, name:'Trollblood',   desc:'Your flesh knits unnaturally fast. Rapid HP regeneration.' },
+  { id:'venom',   good:1, name:'Venom Glands', desc:'Your touch drips poison. Your hits envenom foes.' },
+  { id:'frail',   good:0, name:'Brittle Bones',desc:'Your skeleton creaks and cracks. -1 Toughness.', apply:p=>{p.attr.tou=Math.max(1,p.attr.tou-1);} },
+  { id:'feeble',  good:0, name:'Withered Arm', desc:'One arm shrivels. -2 Strength.', apply:p=>{p.attr.str=Math.max(1,p.attr.str-2);} },
+  { id:'teleport',good:0, name:'Teleportitis', desc:'Reality slips around you — you blink at random.' },
+  { id:'hunger',  good:0, name:'Burning Gut',  desc:'A furnace churns within. You hunger far faster.' },
+  { id:'manaburn',good:0, name:'Leaking Aura', desc:'Power bleeds from you. -6 maximum mana.' },
+  { id:'fragile', good:0, name:'Glass Flesh',  desc:'Your body turns delicate. -8 maximum HP.' },
+];
+function mutById(id){ return MUTATIONS.find(m=>m.id===id); }
+function hasMut(id){ return S.p && S.p.mutations && S.p.mutations.includes(id); }
+function hasPower(id){ return S.p && S.p.powers && S.p.powers.includes(id); }
+
 // glyph colors
 const COL={ '#':'var(--wall)','.':'var(--floor)','+':'var(--gold)','>':'var(--cyan)','<':'var(--cyan)',
   '@':'var(--white)','$':'var(--gold)','!':'var(--red)','?':'var(--white)','/':'var(--cyan)','[':'var(--blue)',
@@ -200,12 +258,12 @@ const MONSTERS = [
   { id:'wolf',    g:'w', c:'#aaa', name:'dire wolf',     d:5, hp:'2d8',  acc:14, def:15, dmg:'1d8', xp:11, spd:'fast' },
   { id:'ogre',    g:'O', c:'#c76', name:'ogre',          d:6, hp:'4d8',  acc:14, def:11, dmg:'2d6', xp:18, spd:'slow' },
   { id:'skeleton',g:'Z', c:'#dda', name:'skeleton lord', d:6, hp:'3d8',  acc:15, def:15, dmg:'1d10',xp:16 },
-  { id:'wraith',  g:'W', c:'#aef', name:'wraith',        d:7, hp:'3d8',  acc:16, def:17, dmg:'2d6', xp:24, drain:1 },
+  { id:'wraith',  g:'W', c:'#aef', name:'wraith',        d:7, hp:'3d8',  acc:16, def:17, dmg:'2d6', xp:24, drain:1, corrupt:7 },
   { id:'troll_m', g:'T', c:'#5b5', name:'cave troll',    d:7, hp:'6d8',  acc:16, def:14, dmg:'2d8', xp:30, regen:2 },
-  { id:'vampire', g:'V', c:'#d6f', name:'vampire',       d:8, hp:'4d8',  acc:17, def:18, dmg:'2d6', xp:34, drain:1, spd:'fast' },
+  { id:'vampire', g:'V', c:'#d6f', name:'vampire',       d:8, hp:'4d8',  acc:17, def:18, dmg:'2d6', xp:34, drain:1, spd:'fast', corrupt:9 },
   { id:'wyrmlet', g:'d', c:'#f96', name:'fire drake',    d:9, hp:'5d8',  acc:17, def:16, dmg:'2d8', xp:40, breath:'2d6' },
-  { id:'demon',   g:'&', c:'#f55', name:'lesser demon',  d:9, hp:'6d8',  acc:18, def:18, dmg:'3d6', xp:48 },
-  { id:'wyrm',    g:'D', c:'#fd5', name:'ANCIENT WYRM',  d:99,hp:'12d10',acc:20, def:19, dmg:'3d8', xp:300, breath:'4d6', boss:1, spd:'norm' },
+  { id:'demon',   g:'&', c:'#f55', name:'lesser demon',  d:9, hp:'6d8',  acc:18, def:18, dmg:'3d6', xp:48, corrupt:12 },
+  { id:'wyrm',    g:'D', c:'#fd5', name:'ANCIENT WYRM',  d:99,hp:'12d10',acc:20, def:19, dmg:'3d8', xp:300, breath:'4d6', boss:1, spd:'norm', corrupt:20 },
 ];
 
 const WEAPONS = {
@@ -390,26 +448,79 @@ function createPlayer(raceId,clsId,name){
     level:1, xp:0, xpNext:20, gold:0,
     x:0,y:0, weapon:null, armor:null, inv:[], spells:(C.spells||[]).slice(),
     food:1400, foodMax:1600, poison:0, regenTick:0, mpTick:0,
-    crit:C.crit, find:(C.find||0)+(R.find||0) };
+    crit:C.crit, find:(C.find||0)+(R.find||0),
+    // talents / powers / corruption
+    powers:[], mutations:[], corruption:0, mutCount:0, pendingTalents:0,
+    bonHP:0, bonMP:0, bonAcc:0, bonCrit:0, bonLight:0, bonRegen:0, bonRegenMP:0,
+    dodge:0, poisonRes:0, spellPow:0 };
   S.p=p; recalc(); p.hp=p.maxhp; p.mp=p.maxmp;
   // starting gear
   const st=C.start;
   if(st.weapon){ p.weapon=mkItem(st.weapon); }
   if(st.armor){ p.armor=mkItem(st.armor); }
   (st.items||[]).forEach(id=>addInv(mkItem(id)));
+  // level-1 class powers
+  (POWERS[clsId]||[]).forEach(pw=>{ if(pw.lvl<=1) applyPower(pw.id,true); });
+  recalc(); p.hp=p.maxhp; p.mp=p.maxmp;
+}
+function applyPower(id,quiet){
+  const p=S.p; if(p.powers.includes(id)) return; p.powers.push(id);
+  switch(id){
+    case 'arcane_font': p.bonRegenMP+=2; break;
+    case 'spell_power': p.spellPow+=3; break;
+    case 'keen_eye':    p.bonAcc+=1; p.bonLight+=1; break;
+    case 'deadly_precision': p.bonCrit+=8; break;
+    case 'survivor':    p.bonRegen+=1; break;
+    case 'fortune':     p.find=(p.find||0)+1; p.dodge+=6; break;
+  }
   recalc();
+  if(!quiet){ const pw=powerById(id); msg('Class power unlocked — '+(pw?pw.name:id)+'!','good'); }
 }
 function recalc(){
   const p=S.p, R=raceOf(), C=classOf();
-  p.maxhp=Math.max(1, 14 + p.attr.tou*2 + (p.level-1)*C.hpL + (R.hp||0));
-  p.maxmp=Math.max(0, Math.floor((C.caster?p.attr.wil*1.6:p.attr.wil*0.5)) + (p.level-1)*C.mpL + (R.mp||0));
+  p.maxhp=Math.max(1, 14 + p.attr.tou*2 + (p.level-1)*C.hpL + (R.hp||0) + (p.bonHP||0) - (hasMut('fragile')?8:0));
+  p.maxmp=Math.max(0, Math.floor((C.caster?p.attr.wil*1.6:p.attr.wil*0.5)) + (p.level-1)*C.mpL + (R.mp||0) + (p.bonMP||0) - (hasMut('manaburn')?6:0));
   p.foodMax=1600;
-  p.light=4 + (R.light||0) + Math.floor((p.attr.per-10)/3);
-  p.acc = p.attr.dex + C.atk + Math.floor(p.level/2) + (p.weapon?(p.weapon.acc||0)+(p.weapon.ench||0):0);
-  p.ac  = 10 + Math.floor((p.attr.dex-10)/2) + (p.armor?(p.armor.ac||0)+(p.armor.ench||0):0) + Math.floor((p.attr.tou-10)/4);
+  p.light=4 + (R.light||0) + Math.floor((p.attr.per-10)/3) + (p.bonLight||0) + (hasMut('eyes')?2:0);
+  p.acc = p.attr.dex + C.atk + Math.floor(p.level/2) + (p.bonAcc||0) + (p.weapon?(p.weapon.acc||0)+(p.weapon.ench||0):0);
+  p.ac  = 10 + Math.floor((p.attr.dex-10)/2) + (p.armor?(p.armor.ac||0)+(p.armor.ench||0):0) + Math.floor((p.attr.tou-10)/4) + (hasMut('scales')?2:0);
+  p.crit = C.crit + (p.bonCrit||0);
   p.hp=clamp(p.hp??p.maxhp,0,p.maxhp); p.mp=clamp(p.mp??p.maxmp,0,p.maxmp);
 }
-function dmgRoll(){ const p=S.p; const w=p.weapon; const base=w?roll(w.dmg)+(w.ench||0):rng(1,3); return base+Math.floor((p.attr.str-10)/2)+classOf().atk; }
+function dmgRoll(){ const p=S.p; const w=p.weapon; let base=w?roll(w.dmg)+(w.ench||0):rng(1,3);
+  base+=Math.floor((p.attr.str-10)/2)+classOf().atk;
+  if(hasMut('claws')) base+=3;
+  if(hasPower('weapon_master')) base+=Math.floor(p.level/4);
+  return base; }
+
+/* --------------------------- TALENTS & CORRUPTION ------------------------ */
+function addCorruption(n){
+  const p=S.p; p.corruption=(p.corruption||0)+n;
+  while(Math.floor(p.corruption/CORR_PER_MUT) > p.mutCount){ p.mutCount++; gainMutation(); }
+}
+function gainMutation(){
+  const p=S.p;
+  const bag=MUTATIONS.filter(m=>!p.mutations.includes(m.id));
+  if(!bag.length){ msg('Chaos roils within you, but your body can warp no further.','warn'); return; }
+  const m=pick(bag); p.mutations.push(m.id);
+  if(m.apply) m.apply(p);
+  recalc();
+  msg('CHAOS WARPS YOU — '+m.name+': '+m.desc, m.good?'warn':'bad');
+}
+function openTalents(){
+  S.mode='menu';
+  const avail=TALENTS.filter(t=>!t.caster || classOf().caster);
+  const offers=[]; const bag=avail.slice();
+  while(offers.length<3 && bag.length) offers.push(bag.splice(rnd(bag.length),1)[0]);
+  let body='<h1 style="font-size:20px">TALENT</h1><div class="sub">Level '+S.p.level+' — choose a talent to master</div>';
+  offers.forEach(t=>{ body+=`<button class="opt" onclick="chooseTalent('${t.id}')"><b>${t.name}</b><span class="d">${t.desc}</span></button>`; });
+  showScreen(body);
+}
+function chooseTalent(id){
+  const t=TALENTS.find(x=>x.id===id); if(t){ t.apply(S.p); recalc(); msg('You master the talent: '+t.name+'.','good'); }
+  S.p.pendingTalents--;
+  if(S.p.pendingTalents>0) openTalents(); else { hideScreen(); render(); }
+}
 
 function addInv(it){
   // stack consumables by id
@@ -489,14 +600,20 @@ function grabOrb(it){
   victory();
 }
 function playerAttack(m){
-  m.asleep=false;
+  const unaware = m.asleep; m.asleep=false;
   const hitC=clamp(55+(S.p.acc-m.def)*6,5,95);
   if(!chance(hitC)){ msg('You miss the '+m.name+'.','dim'); return endTurn(); }
   let dmg=dmgRoll(); let crit=false;
   if(chance(S.p.crit)){ dmg=Math.floor(dmg*2); crit=true; }
+  if(hasPower('backstab') && unaware){ dmg=Math.floor(dmg*2.5); crit=true; }
   m.hp-=dmg;
-  msg((crit?'CRITICAL! ':'')+'You hit the '+m.name+' for '+dmg+'.', crit?'good':'');
+  msg((crit?(unaware&&hasPower('backstab')?'BACKSTAB! ':'CRITICAL! '):'')+'You hit the '+m.name+' for '+dmg+'.', crit?'good':'');
+  if(hasMut('venom') && m.hp>0){ m.venom=(m.venom||0)+3; }
   if(m.hp<=0){ killMonster(m); }
+  else if(hasPower('cleave') && chance(35)){ // carry into a second adjacent foe
+    const o=S.mons.find(z=>z!==m && z.hp>0 && Math.abs(z.x-S.p.x)<=1 && Math.abs(z.y-S.p.y)<=1);
+    if(o){ const d2=dmgRoll(); o.hp-=d2; o.asleep=false; msg('Your blow cleaves into the '+o.name+' for '+d2+'!','good'); if(o.hp<=0)killMonster(o); }
+  }
   endTurn();
 }
 function killMonster(m){
@@ -504,6 +621,8 @@ function killMonster(m){
   S.mons=S.mons.filter(z=>z!==m);
   if(chance(22)) dropItem(mkItem('corpse'),m.x,m.y);
   if(m.boss){ msg('The ANCIENT WYRM collapses with a world-shaking roar!','warn'); }
+  if(hasPower('second_wind')){ const h=Math.floor(S.p.maxhp*0.25); if(S.p.hp<S.p.maxhp){ heal(h); msg('Second Wind surges through you. +'+h+' HP','good'); } }
+  if(hasPower('shadowstep') && chance(25)){ teleport(); msg('You melt into the shadows.','sys'); }
   gainXP(m.xp);
 }
 function gainXP(n){
@@ -511,8 +630,11 @@ function gainXP(n){
   while(p.xp>=p.xpNext){ p.xp-=p.xpNext; p.level++; p.xpNext=Math.floor(p.xpNext*1.5+15);
     const oldhp=p.maxhp,oldmp=p.maxmp; recalc(); p.hp+=Math.max(0,p.maxhp-oldhp); p.mp+=Math.max(0,p.maxmp-oldmp);
     p.hp=p.maxhp; // full heal on level
-    if(p.level%3===0){ const k=pick(['str','dex','tou','wil','per']); p.attr[k]++; recalc(); msg('Level '+p.level+'! You grow more '+({str:'powerful',dex:'agile',tou:'hardy',wil:'attuned',per:'perceptive'})[k]+'. (+1 '+k.toUpperCase()+')','good'); }
-    else msg('Welcome to level '+p.level+'! You feel renewed.','good');
+    msg('Welcome to level '+p.level+'! You feel renewed.','good');
+    // class powers at milestones
+    (POWERS[p.cls]||[]).forEach(pw=>{ if(p.level>=pw.lvl && !p.powers.includes(pw.id)) applyPower(pw.id); });
+    // a talent pick every few levels
+    if(p.level%TALENT_LEVELS===0) p.pendingTalents++;
   }
 }
 
@@ -533,7 +655,7 @@ function nearestVisibleMonster(){
 }
 function spellBolt(dmgspec,critB,kind){
   const m=nearestVisibleMonster(); if(!m){ msg('No target in sight.','dim'); return false; }
-  let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2); m.asleep=false; m.hp-=dmg;
+  let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2)+(S.p.spellPow||0); m.asleep=false; m.hp-=dmg;
   msg('A bolt of '+kind+' strikes the '+m.name+' for '+dmg+'.','sys');
   if(m.hp<=0) killMonster(m);
   return true;
@@ -541,7 +663,7 @@ function spellBolt(dmgspec,critB,kind){
 function spellFireball(dmgspec){
   const m=nearestVisibleMonster(); if(!m){ msg('No target in sight.','dim'); return false; }
   const cx=m.x,cy=m.y; let hit=0;
-  for(const z of S.mons.slice()){ if(Math.abs(z.x-cx)<=1&&Math.abs(z.y-cy)<=1){ let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2); z.asleep=false; z.hp-=dmg; hit++; if(z.hp<=0)killMonster(z);} }
+  for(const z of S.mons.slice()){ if(Math.abs(z.x-cx)<=1&&Math.abs(z.y-cy)<=1){ let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2)+(S.p.spellPow||0); z.asleep=false; z.hp-=dmg; hit++; if(z.hp<=0)killMonster(z);} }
   // self damage if adjacent
   if(Math.abs(S.p.x-cx)<=1&&Math.abs(S.p.y-cy)<=1){ const d=roll('1d6'); S.p.hp-=d; msg('The blast singes you for '+d+'!','bad'); }
   msg('Fireball erupts! '+hit+' foe'+(hit===1?'':'s')+' caught in the flames.','sys');
@@ -571,23 +693,31 @@ function endTurn(noMonsters){
   S.turn++;
   if(S.p.hp<=0){ return death(); }
   computeFOV(); render();
+  if(!S.over && S.p.pendingTalents>0) openTalents();
 }
 function upkeep(){
   const p=S.p, R=raceOf();
-  // hunger
-  p.food-=Math.round(R.food*(p.level>8?1.3:1));
+  // background corruption seeps from the deep
+  if(S.depth>0) addCorruption(S.depth*0.03);
+  // teleportitis mutation
+  if(hasMut('teleport') && chance(2)){ teleport(); computeFOV(); msg('Teleportitis warps you elsewhere!','warn'); }
+  // hunger (faster with the Burning Gut mutation)
+  const foodMul = (hasMut('hunger')?1.6:1) * (p.level>8?1.3:1);
+  p.food-=Math.max(1,Math.round(R.food*foodMul));
   if(p.food<=0){ p.food=0; p.hp-=1; if(S.turn%3===0)msg('You are starving!','bad'); }
   // poison
   if(p.poison>0){ p.poison--; p.hp-=1; if(S.turn%2===0)msg('The poison burns. (-1 HP)','bad'); }
-  // regen
-  const regenRate=Math.max(4, 16-Math.floor(p.attr.tou/2)-(R.regen||0)*4);
+  // regen (Toughness + Trollblood/Fast-Healer talents & race)
+  let regenRate=16-Math.floor(p.attr.tou/2)-(R.regen||0)*4-(p.bonRegen||0)*3-(hasMut('mregen')?6:0);
+  regenRate=Math.max(3,regenRate);
   if(p.hp<p.maxhp && p.food>0){ if(++p.regenTick>=regenRate){ p.regenTick=0; p.hp=clamp(p.hp+1,0,p.maxhp); } }
-  const mpRate=Math.max(3, 12-Math.floor(p.attr.wil/2));
+  const mpRate=Math.max(2, 12-Math.floor(p.attr.wil/2)-(p.bonRegenMP||0)*3);
   if(p.mp<p.maxmp){ if(++p.mpTick>=mpRate){ p.mpTick=0; p.mp=clamp(p.mp+1,0,p.maxmp); } }
 }
 function monstersAct(){
   for(const m of S.mons.slice()){
     if(m.hp<=0) continue;
+    if(m.venom>0){ m.venom--; m.hp-=2; if(m.hp<=0){ killMonster(m); continue; } }
     if(m.spd==='slow'){ m.slowtick=!m.slowtick; if(m.slowtick) continue; }
     monsterStep(m);
     if(m.spd==='fast' && m.hp>0 && !S.over) monsterStep(m);
@@ -628,13 +758,15 @@ function tryMonMove(m,dx,dy){
 }
 function monsterAttack(m){
   const p=S.p;
+  if(p.dodge && chance(p.dodge)){ if(S.vis[m.y][m.x])msg('You dodge the '+m.name+'\'s attack.','dim'); return; }
   const hitC=clamp(50+(m.acc-p.ac)*6,5,95);
   if(!chance(hitC)){ if(S.vis[m.y][m.x])msg('The '+m.name+' misses you.','dim'); return; }
   let dmg=roll(m.dmg);
   p.hp-=dmg;
   let extra='';
-  if(m.poison){ p.poison=(p.poison||0)+m.poison; extra=' You are poisoned!'; }
+  if(m.poison){ const amt=p.poisonRes?Math.ceil(m.poison/2):m.poison; p.poison=(p.poison||0)+amt; extra=' You are poisoned!'; }
   if(m.drain && chance(40)){ p.xp=Math.max(0,p.xp-m.drain*4); extra+=' It drains your vigour!'; }
+  if(m.corrupt){ addCorruption(m.corrupt); extra+=' You feel the cold touch of Chaos.'; }
   msg('The '+m.name+' hits you for '+dmg+'.'+extra,'bad');
   if(p.hp<=0){ death(); }
 }
@@ -695,6 +827,9 @@ function renderHUD(){
   const p=S.p;
   $('hName').textContent=p.name+' the '+raceOf().name+' '+classOf().name;
   $('hDepth').textContent=S.depth; $('hClvl').textContent=p.level; $('hGold').textContent=p.gold;
+  const corr=Math.floor(p.corruption||0);
+  const cp=$('hCorrPill'); cp.style.display=corr>0?'':'none';
+  if(corr>0){ $('hCorr').textContent=corr; const toNext=CORR_PER_MUT-(corr%CORR_PER_MUT); cp.title='mutation in ~'+toNext; cp.style.color=(corr%CORR_PER_MUT)>=70?'var(--red)':''; }
   setBar('hp',p.hp,p.maxhp,'HP '+Math.max(0,p.hp)+'/'+p.maxhp);
   setBar('mp',p.mp,p.maxmp,'MP '+p.mp+'/'+p.maxmp);
   setBar('xp',p.xp,p.xpNext,'XP '+Math.floor(p.xp/p.xpNext*100)+'%');
@@ -775,7 +910,8 @@ function howto(){
     </div>
     <h2>SURVIVAL</h2>
     <p style="font-size:13px;color:var(--dim);line-height:1.5">
-      Rest to heal when safe, but resting burns food. Eat rations before you starve. Read unknown murky potions at your peril. Descend when ready — you can climb back up, but the only way truly out is the Orb.
+      Rest to heal when safe, but resting burns food. Eat rations before you starve. Descend when ready — you can climb back up, but the only way truly out is the Orb.<br><br>
+      Gain levels for <b>class powers</b> and to pick <b>talents</b>. Beware <b>Chaos</b>: the deeper you delve and the more chaos-touched horrors strike you, the higher your <b>corruption</b> climbs — and each threshold warps your flesh with a <b>mutation</b>, gift or curse.
     </p>
     <button class="opt" onclick="titleScreen()"><b>↩ Back</b></button>
   `);
@@ -872,16 +1008,17 @@ function openCast(){
   S.mode='menu';
   let body='<h1 style="font-size:20px">CAST A SPELL</h1>';
   body+='<div class="sub">MP '+S.p.mp+'/'+S.p.maxmp+'</div>';
-  S.p.spells.forEach((id)=>{ const sp=SPELLS[id]; const ok=S.p.mp>=sp.cost;
-    body+=`<button class="opt" ${ok?'':'disabled style=opacity:.4'} onclick="${ok?`doCast('${id}')`:''}"><b>${sp.name}</b> <span class="tag">${sp.cost} MP</span><span class="d">${sp.desc}</span></button>`; });
+  S.p.spells.forEach((id)=>{ const sp=SPELLS[id]; const c=spellCost(id); const ok=S.p.mp>=c;
+    body+=`<button class="opt" ${ok?'':'disabled style=opacity:.4'} onclick="${ok?`doCast('${id}')`:''}"><b>${sp.name}</b> <span class="tag">${c} MP</span><span class="d">${sp.desc}</span></button>`; });
   body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Back</b></button>';
   showScreen(body);
 }
+function spellCost(id){ const sp=SPELLS[id]; let c=sp.cost; if(id==='fireball'&&hasPower('pyromancer'))c=Math.max(1,c-3); return c; }
 function doCast(id){
-  const sp=SPELLS[id]; if(S.p.mp<sp.cost){ return; }
+  const sp=SPELLS[id]; const cost=spellCost(id); if(S.p.mp<cost){ return; }
   hideScreen();
   const ok=sp.cast();
-  if(ok!==false){ S.p.mp-=sp.cost; endTurn(); } else { render(); }
+  if(ok!==false){ S.p.mp-=cost; endTurn(); } else { render(); }
 }
 
 /* ---- character sheet ---- */
@@ -903,9 +1040,14 @@ function openChar(){
       <div class="statline"><span>Damage</span><b>${p.weapon?p.weapon.dmg+(p.weapon.ench?'+'+p.weapon.ench:''):'1d3'}</b></div>
       <div class="statline"><span>Gold</span><b>${p.gold}</b></div>
     </div>
+    <div class="statline"><span>Dodge</span><b>${p.dodge||0}%</b></div>
     <div class="statline"><span>Wielding</span><b>${p.weapon?itemName(p.weapon):'bare hands'}</b></div>
     <div class="statline"><span>Wearing</span><b>${p.armor?itemName(p.armor):'nothing'}</b></div>
     ${p.spells.length?`<div class="statline"><span>Spells</span><b>${p.spells.map(s=>SPELLS[s].name).join(', ')}</b></div>`:''}
+    <h2>Class powers</h2>
+    <div class="glyphkey">${p.powers.length?p.powers.map(id=>{const pw=powerById(id);return pw?'<b>'+pw.name+'</b> — '+pw.desc:'';}).join('<br>'):'<i>none yet</i>'}</div>
+    <h2>Corruption ${Math.floor(p.corruption||0)} <span style="color:var(--dim);font-size:11px">(mutation every ${CORR_PER_MUT})</span></h2>
+    <div class="glyphkey">${p.mutations.length?p.mutations.map(id=>{const m=mutById(id);return '<b style="color:'+(m.good?'var(--green)':'var(--red)')+'">'+m.name+'</b> — '+m.desc;}).join('<br>'):'<i>your flesh is still your own</i>'}</div>
     <button class="opt" onclick="hideScreen();render()"><b>↩ Close</b></button>
   `);
 }
