@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0a0f" />
+<title>RIFTBOUND — An Affliction RPG</title>
+<style>
+  :root{
+    --bg:#0a0a0f; --panel:#14141d; --panel2:#1c1c28; --line:#2a2a3a;
+    --ink:#d9d4c6; --dim:#8b8675; --bright:#f4efe2;
+    --gold:#e8b34a; --red:#e2553f; --green:#7fc06a; --blue:#5aa9e6;
+    --mag:#c07bd6; --cyan:#56c8c8; --violet:#9a7be0;
+    --hp:#d2433a; --mp:#3f74d8; --xp:#caa23a;
+    --bleed:#e2553f; --poison:#7fc06a; --burn:#f59563; --doom:#9a7be0; --frost:#56c8c8;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;min-height:100%;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    overscroll-behavior:none;-webkit-user-select:none;user-select:none;}
+  #app{max-width:680px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column;
+    padding:max(8px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom));}
+  h1,h2,h3{margin:0;font-weight:800;letter-spacing:1px;}
+  h1{font-size:30px;color:var(--gold);text-align:center;text-shadow:0 2px 14px rgba(232,179,74,.25);}
+  h2{font-size:17px;color:var(--bright);margin:.4em 0;}
+  h3{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;}
+  .sub{color:var(--dim);font-size:12px;text-align:center;}
+  .pill{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:5px;
+    padding:1px 7px;font-size:11px;color:var(--dim);}
+  .pill b{color:var(--ink);}
+  button{font-family:inherit;cursor:pointer;}
+  .btn{background:var(--panel2);color:var(--ink);border:1px solid #34344a;border-radius:9px;
+    font-weight:700;font-size:13px;padding:10px 12px;line-height:1.15;text-align:center;transition:.08s;}
+  .btn:hover{background:#26263a;}
+  .btn:active{transform:translateY(1px);}
+  .btn[disabled]{opacity:.32;cursor:not-allowed;}
+  .btn.gold{background:#2a2410;border-color:#5a4d1f;color:var(--gold);}
+  .btn.gold:hover{background:#352c12;}
+  .btn.red{background:#2a1411;border-color:#5a2a22;color:#ef8d7c;}
+  .btn.wide{width:100%;}
+  .btn small{display:block;font-size:10px;color:var(--dim);font-weight:400;margin-top:2px;}
+  .row{display:flex;gap:8px;}
+  .col{display:flex;flex-direction:column;gap:8px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;}
+  .bar{position:relative;height:14px;border-radius:4px;background:#000;overflow:hidden;border:1px solid #000;}
+  .bar>i{position:absolute;left:0;top:0;bottom:0;display:block;transition:width .25s;}
+  .bar>span{position:absolute;left:6px;top:0;font-size:10px;line-height:14px;color:#fff;text-shadow:0 1px 1px #000;font-weight:700;}
+
+  /* Screens */
+  .screen{display:none;flex-direction:column;gap:10px;flex:1;}
+  .screen.show{display:flex;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;}}
+
+  /* Aspect picker */
+  .aspect{display:flex;gap:9px;align-items:flex-start;text-align:left;}
+  .aspect.sel{border-color:var(--gold);background:#1d1a10;}
+  .glyph{width:30px;height:30px;border-radius:7px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    font-size:17px;font-weight:800;}
+  .aspect .nm{font-size:14px;font-weight:800;color:var(--bright);}
+  .aspect .at{font-size:10px;color:var(--dim);}
+  .aspect .ds{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.35;}
+
+  /* Index/status */
+  #hud{position:sticky;top:0;z-index:5;background:linear-gradient(var(--bg),var(--bg) 84%,transparent);padding-bottom:4px;}
+  .stchips{display:flex;flex-wrap:wrap;gap:5px;font-size:11px;}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:2px 7px;}
+  .stat b{color:var(--bright);}
+  .pwr{color:var(--red);} .spd{color:var(--cyan);} .spr{color:var(--violet);} .rcv{color:var(--green);}
+
+  /* Map */
+  #map{position:relative;}
+  .maprow{display:flex;justify-content:center;gap:14px;margin:7px 0;}
+  .node{width:46px;height:46px;border-radius:11px;border:2px solid var(--line);background:var(--panel2);
+    display:flex;align-items:center;justify-content:center;font-size:20px;position:relative;color:var(--dim);}
+  .node.cur{border-color:var(--gold);box-shadow:0 0 0 3px rgba(232,179,74,.18);}
+  .node.avail{border-color:var(--green);color:var(--ink);cursor:pointer;animation:pulse 1.4s infinite;}
+  .node.avail:active{transform:scale(.94);}
+  .node.done{opacity:.4;}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(127,192,106,.5);}50%{box-shadow:0 0 0 5px rgba(127,192,106,0);}}
+
+  /* Combat */
+  .enemy{display:flex;gap:9px;align-items:center;text-align:left;padding:8px;border-radius:9px;border:1px solid var(--line);background:var(--panel);}
+  .enemy.target{border-color:var(--red);background:#1d1311;}
+  .enemy.dead{opacity:.3;filter:grayscale(1);}
+  .emoji{font-size:30px;flex:0 0 auto;}
+  .ename{font-size:13px;font-weight:800;color:var(--bright);}
+  .intent{font-size:11px;color:var(--gold);}
+  .afflrow{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;}
+  .af{font-size:10px;border-radius:4px;padding:0 5px;font-weight:700;border:1px solid;}
+  .af.bleed{color:var(--bleed);border-color:var(--bleed);} .af.poison{color:var(--poison);border-color:var(--poison);}
+  .af.burn{color:var(--burn);border-color:var(--burn);} .af.doom{color:var(--doom);border-color:var(--doom);}
+  .af.frost{color:var(--frost);border-color:var(--frost);} .af.weak{color:var(--dim);border-color:var(--dim);}
+  .af.buff{color:var(--green);border-color:var(--green);}
+
+  #log{height:74px;overflow-y:auto;font-size:11.5px;line-height:1.4;background:#0c0c12;border:1px solid var(--line);
+    border-radius:8px;padding:6px 8px;display:flex;flex-direction:column-reverse;}
+  #log div{white-space:normal;}
+  .l-good{color:var(--green);} .l-bad{color:var(--red);} .l-sys{color:var(--blue);} .l-dim{color:var(--dim);}
+  .l-aff{color:var(--gold);} .l-echo{color:var(--cyan);}
+
+  .abilities{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+  .echobar{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;}
+  .echo{flex:0 0 auto;width:54px;text-align:center;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 3px;}
+  .echo .em{font-size:20px;} .echo .hp{font-size:9px;color:var(--green);} .echo .nm2{font-size:9px;color:var(--dim);}
+  .echo.deployed{border-color:var(--cyan);}
+
+  /* Overlay */
+  #overlay{position:fixed;inset:0;background:rgba(6,6,10,.93);z-index:30;display:none;align-items:center;justify-content:center;padding:18px;}
+  #overlay.show{display:flex;animation:fade .3s;}
+  #overlay .box{max-width:460px;width:100%;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;}
+  .float{position:fixed;pointer-events:none;font-weight:800;font-size:18px;z-index:40;animation:floatUp 1s ease-out forwards;text-shadow:0 1px 3px #000;}
+  @keyframes floatUp{0%{opacity:1;transform:translateY(0);}100%{opacity:0;transform:translateY(-42px);}}
+  .center{text-align:center;}
+  .tiny{font-size:11px;color:var(--dim);}
+  .divider{height:1px;background:var(--line);margin:8px 0;}
+  a.link{color:var(--blue);cursor:pointer;text-decoration:underline;}
+  .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#1d1a10;border:1px solid var(--gold);
+    color:var(--gold);font-size:12px;font-weight:700;padding:8px 14px;border-radius:8px;z-index:50;opacity:0;transition:.3s;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- ============ TITLE ============ -->
+  <div class="screen show" id="scr-title">
+    <div style="flex:1"></div>
+    <h1>RIFTBOUND</h1>
+    <div class="sub">an affliction RPG · bind aspects, raise echoes, climb the ranks</div>
+    <div style="height:18px"></div>
+    <div class="col" style="max-width:320px;margin:0 auto;width:100%">
+      <button class="btn gold wide" id="btn-new">⚔️ New Riftborn</button>
+      <button class="btn wide" id="btn-continue">↻ Continue</button>
+      <button class="btn wide" id="btn-how">❔ How to Play</button>
+    </div>
+    <div style="flex:1.4"></div>
+    <div class="tiny center">A self-contained single-file game. No accounts, saves to this browser.</div>
+  </div>
+
+  <!-- ============ CREATE ============ -->
+  <div class="screen" id="scr-create">
+    <h2 class="center">Bind Three Aspects</h2>
+    <div class="sub">Your soul fuses them into a <b>Convergence</b>. Each Aspect bonds an attribute and grants afflictions.</div>
+    <div class="col" id="aspect-list"></div>
+    <div class="card" id="convergence-box" style="display:none"></div>
+    <button class="btn gold wide" id="btn-begin" disabled>Begin the Descent</button>
+    <button class="btn wide" id="btn-back-title">‹ Back</button>
+  </div>
+
+  <!-- ============ MAP / HUB ============ -->
+  <div class="screen" id="scr-map">
+    <div id="hud"></div>
+    <div class="card" id="quest-card"></div>
+    <h3>The Gate — choose your path</h3>
+    <div id="map"></div>
+    <div class="row">
+      <button class="btn" id="btn-index" style="flex:1">📖 The Index</button>
+      <button class="btn" id="btn-abandon" style="flex:1">⌂ Town</button>
+    </div>
+  </div>
+
+  <!-- ============ COMBAT ============ -->
+  <div class="screen" id="scr-combat">
+    <div id="hud2"></div>
+    <div class="col" id="enemy-list"></div>
+    <div id="log"></div>
+    <h3 style="margin-bottom:0">Echoes <span class="tiny" id="echo-cap"></span></h3>
+    <div class="echobar" id="echo-bar"></div>
+    <h3 style="margin-bottom:0">Abilities</h3>
+    <div class="abilities" id="ability-list"></div>
+  </div>
+
+  <!-- ============ TOWN ============ -->
+  <div class="screen" id="scr-town">
+    <div id="hud3"></div>
+    <h2 class="center">⌂ Hollowreach</h2>
+    <div class="sub">Rest between gates. Spend your spoils.</div>
+    <div class="card" id="town-body"></div>
+    <button class="btn gold wide" id="btn-enter-gate">Enter the next Gate ›</button>
+  </div>
+</div>
+
+<div id="overlay"><div class="box" id="overlay-box"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ===================================================================
+   RIFTBOUND — single-file affliction RPG
+   Fuses: essence/confluence + afflictions (HWFWM) with
+   the System / leveling / ranks / extraction (Solo Leveling).
+   =================================================================== */
+
+const SAVE_KEY = "riftbound_save_v1";
+const $ = id => document.getElementById(id);
+const rnd = n => Math.floor(Math.random()*n);
+const pick = a => a[rnd(a.length)];
+const clamp = (v,a,b) => Math.max(a,Math.min(b,v));
+
+/* ---------- DATA: ATTRIBUTES ---------- */
+// Power: affliction & strike damage. Speed: extra-action chance + dodge.
+// Spirit: max MP, potency, affliction duration. Recovery: HP/MP regen per turn.
+const ATTRS = ["power","speed","spirit","recovery"];
+const ATTR_LABEL = {power:"PWR",speed:"SPD",spirit:"SPR",recovery:"RCV"};
+const ATTR_CLASS = {power:"pwr",speed:"spd",spirit:"spr",recovery:"rcv"};
+
+/* ---------- DATA: AFFLICTIONS ----------
+   Stacking damage-over-time / debuffs. The heart of combat. */
+const AFFLICTIONS = {
+  bleed:  {name:"Bleed",  cls:"bleed",  tick:t=>t.stacks*2,            desc:"2 dmg/stack each turn"},
+  poison: {name:"Venom",  cls:"poison", tick:t=>t.stacks*1+Math.floor(t.stacks*t.stacks*0.4), desc:"ramps as it stacks"},
+  burn:   {name:"Burn",   cls:"burn",   tick:t=>t.stacks*3,            desc:"3 dmg/stack, short"},
+  frost:  {name:"Frost",  cls:"frost",  tick:_=>0,                      desc:"slows; may skip turns"},
+  weak:   {name:"Weaken", cls:"weak",   tick:_=>0,                      desc:"-35% enemy damage"},
+  doom:   {name:"Doom",   cls:"doom",   tick:_=>0, detonateAt:4, blast:t=>t.power*9, desc:"at 4 stacks: detonate"},
+};
+
+/* ---------- DATA: ASPECTS (essences) ----------
+   Each bonds one attribute and provides up to 4 abilities (first free,
+   the rest unlocked by Glyphs). Abilities apply afflictions / drains /
+   summon echoes — the affliction-caster identity. */
+const ASPECTS = {
+  blood: { name:"Blood", attr:"power", color:"var(--red)", icon:"🩸",
+    desc:"Bleed and lifesteal. Punish the wounded.",
+    abilities:[
+      {name:"Rendcut", mp:0, kind:"strike", dmg:s=>4+s.power*2, aff:["bleed",1], txt:"strike + Bleed"},
+      {name:"Hemorrhage", mp:6, kind:"strike", dmg:s=>2+s.power, aff:["bleed",3], txt:"apply 3 Bleed"},
+      {name:"Crimson Feast", mp:8, kind:"drain", dmg:s=>6+s.power*2, heal:.8, txt:"damage, heal 80%"},
+      {name:"Exsanguinate", mp:14, kind:"execute", txt:"detonate all Bleed ×3 as burst"},
+    ]},
+  shadow: { name:"Shadow", attr:"speed", color:"var(--violet)", icon:"🌑",
+    desc:"Evasion and echoes. Strike from nowhere.",
+    abilities:[
+      {name:"Umbral Slash", mp:0, kind:"strike", dmg:s=>5+s.speed*2, txt:"fast strike"},
+      {name:"Shadowstep", mp:5, kind:"buff", buff:["dodge",2], extra:true, txt:"gain Dodge + act again"},
+      {name:"Raise Wraith", mp:9, kind:"summon", echo:"wraith", txt:"summon a Wraith echo"},
+      {name:"Eclipse", mp:13, kind:"aoe", dmg:s=>4+s.speed, aff:["weak",2], txt:"hit all + Weaken"},
+    ]},
+  plague: { name:"Plague", attr:"recovery", color:"var(--green)", icon:"☠️",
+    desc:"Venom that compounds. Outlast everything.",
+    abilities:[
+      {name:"Tainted Touch", mp:0, kind:"strike", dmg:s=>3+s.recovery, aff:["poison",2], txt:"strike + 2 Venom"},
+      {name:"Contagion", mp:7, kind:"aoe", aff:["poison",2], txt:"2 Venom to all"},
+      {name:"Fester", mp:6, kind:"spread", txt:"double Venom on target"},
+      {name:"Miasma", mp:12, kind:"buff", buff:["regen",4], aff_self:true, txt:"strong regen 4 turns"},
+    ]},
+  ember: { name:"Ember", attr:"power", color:"var(--burn)", icon:"🔥",
+    desc:"Burst burns. Burn bright, burn fast.",
+    abilities:[
+      {name:"Cinderlash", mp:0, kind:"strike", dmg:s=>5+s.power*2, aff:["burn",1], txt:"strike + Burn"},
+      {name:"Immolate", mp:8, kind:"strike", dmg:s=>3+s.power, aff:["burn",4], txt:"4 Burn on target"},
+      {name:"Flashfire", mp:9, kind:"aoe", dmg:s=>6+s.power, txt:"big damage to all"},
+      {name:"Supernova", mp:16, kind:"aoe", dmg:s=>10+s.power*3, txt:"massive AoE blast"},
+    ]},
+  frostA: { name:"Frost", attr:"spirit", color:"var(--frost)", icon:"❄️",
+    desc:"Control. Freeze them where they stand.",
+    abilities:[
+      {name:"Rimeshard", mp:0, kind:"strike", dmg:s=>4+s.spirit, aff:["frost",2], txt:"strike + Frost"},
+      {name:"Deep Freeze", mp:8, kind:"strike", dmg:s=>2+s.spirit, aff:["frost",4], txt:"heavy slow"},
+      {name:"Ward", mp:6, kind:"buff", buff:["shield",3], shield:s=>10+s.spirit*3, txt:"absorb shield"},
+      {name:"Glacial Tomb", mp:13, kind:"aoe", dmg:s=>3+s.spirit, aff:["frost",2], txt:"freeze the room"},
+    ]},
+  void: { name:"Void", attr:"spirit", color:"var(--mag)", icon:"🕳️",
+    desc:"Doom that detonates. Inevitability made manifest.",
+    abilities:[
+      {name:"Dread Bolt", mp:0, kind:"strike", dmg:s=>4+s.spirit, aff:["doom",1], txt:"strike + 1 Doom"},
+      {name:"Mark of Ruin", mp:7, kind:"strike", dmg:s=>1, aff:["doom",2], txt:"2 Doom on target"},
+      {name:"Unmake", mp:10, kind:"drain", dmg:s=>5+s.spirit*2, mpburn:6, txt:"damage + burn enemy resolve"},
+      {name:"Oblivion", mp:15, kind:"aoe", aff:["doom",2], txt:"2 Doom to all (mass detonation)"},
+    ]},
+};
+const ASPECT_KEYS = Object.keys(ASPECTS);
+
+/* ---------- CONVERGENCE (confluence) ----------
+   Emerges from the 3 chosen aspects. A signature ultimate + a passive. */
+const CONVERGENCES = {
+  "blood,shadow,void":   {name:"DOOM", icon:"💀", passive:"On kill, +2 MP and gain 1 Dodge.",
+    ult:{name:"Reaper's Verdict", mp:18, txt:"Detonate ALL afflictions on ALL enemies for huge damage."}},
+  "ember,blood,plague":  {name:"PYRE", icon:"🌋", passive:"Your DoT afflictions deal +1 per stack.",
+    ult:{name:"Funeral Pyre", mp:18, txt:"Set the room ablaze: 6 Burn to all enemies."}},
+  "frostA,void,shadow":  {name:"ENTROPY", icon:"🌀", passive:"Frozen enemies take +50% from you.",
+    ult:{name:"Heat Death", mp:18, txt:"Freeze + 3 Doom to all enemies."}},
+};
+function convergenceFor(keys){
+  const sorted=[...keys].sort().join(",");
+  if(CONVERGENCES[sorted]) return {...CONVERGENCES[sorted], key:sorted};
+  // generic fallback: a Convergence themed on the first aspect
+  const a=ASPECTS[keys[0]];
+  return {name:a.name.toUpperCase()+"BANE", icon:"✴️", key:sorted,
+    passive:"Killing a foe restores 4 MP.",
+    ult:{name:"Confluence Burst", mp:18, txt:"Re-apply every affliction you know to all enemies."}};
+}
+
+/* ---------- RANKS ---------- */
+const RANKS = ["Iron","Bronze","Silver","Gold","Astral"];
+const RANK_COLOR = ["#9aa0a6","#b87333","#c0c0d0","#e8b34a","#9a7be0"];
+
+/* ---------- ECHO TEMPLATES (extracted shadows) ---------- */
+const ECHO_BASE = {
+  wraith: {name:"Wraith", em:"👻", hp:18, dmg:5, aff:null},
+};
+// generic echo from a defeated enemy
+function echoFromEnemy(e){
+  return {id:"e"+(G.echoSeq++), name:e.name, em:e.em,
+    hp:Math.round(e.maxhp*0.6), maxhp:Math.round(e.maxhp*0.6),
+    dmg:Math.max(3,Math.round(e.dmg*0.7)), aff:e.onhit?e.onhit[0]:null, deployed:false};
+}
+
+/* ---------- ENEMY POOL (scales with gate rank) ---------- */
+const ENEMY_POOL = [
+  {name:"Gloomrat",   em:"🐀", base:14, dmg:4},
+  {name:"Hex-Moth",   em:"🦋", base:12, dmg:3, onhit:["weak",1]},
+  {name:"Bone Stalker",em:"💀", base:20, dmg:6},
+  {name:"Mireling",   em:"🦎", base:18, dmg:5, onhit:["poison",1]},
+  {name:"Ash Hound",  em:"🐺", base:22, dmg:7, onhit:["burn",1]},
+  {name:"Rift Crawler",em:"🦂", base:24, dmg:6, onhit:["bleed",1]},
+  {name:"Frost Imp",  em:"🧊", base:16, dmg:5, onhit:["frost",1]},
+  {name:"Void Wisp",  em:"🌌", base:15, dmg:4, onhit:["doom",1]},
+];
+const ELITE_POOL = [
+  {name:"Carrion Knight", em:"🛡️", base:46, dmg:10, onhit:["bleed",2]},
+  {name:"Plague Ogre",   em:"👹", base:54, dmg:9, onhit:["poison",2]},
+  {name:"Wraithlord",    em:"⚰️", base:48, dmg:11, onhit:["doom",1]},
+];
+const SOVEREIGNS = [
+  {name:"The Iron Sovereign",   em:"🤖", base:80,  dmg:12, onhit:["weak",1]},
+  {name:"The Bronze Tyrant",    em:"🐲", base:120, dmg:15, onhit:["burn",2]},
+  {name:"The Silver Widow",     em:"🕷️", base:170, dmg:17, onhit:["poison",3]},
+  {name:"The Gilded Devourer",  em:"👁️", base:240, dmg:20, onhit:["doom",1]},
+  {name:"The Astral Monarch",   em:"🌟", base:340, dmg:24, onhit:["bleed",3]},
+];
+
+/* ===================================================================
+   GAME STATE
+   =================================================================== */
+let G = null;
+function newGame(aspects){
+  const conv = convergenceFor(aspects);
+  G = {
+    aspects, convergence:conv,
+    level:1, xp:0, xpNext:20, rankIdx:0,
+    base:{power:3,speed:3,spirit:3,recovery:3},
+    unlocked:{}, // aspectKey -> highest ability index unlocked (0 = first only)
+    hp:0, maxhp:0, mp:0, maxmp:0,
+    shards:0, cores:0, glyphs:1,
+    echoes:[], echoSeq:1,
+    gateNum:1, map:null, mapPos:null,
+    combat:null,
+    quest:null, questDoneToday:false,
+    afflictionsKnown:new Set(),
+  };
+  aspects.forEach(k=>{ G.unlocked[k]=0; ASPECTS[k].abilities[0]; });
+  // record which afflictions you can apply (for Convergence ults)
+  recomputeKnownAfflictions();
+  // bond bonuses: each aspect's attribute starts a touch higher
+  aspects.forEach(k=>{ G.base[ASPECTS[k].attr]+=1; });
+  recalcStats(true);
+  rollQuest();
+  log("sys","The Index opens before you. A status window only you can see.");
+}
+function recomputeKnownAfflictions(){
+  G.afflictionsKnown=new Set();
+  G.aspects.forEach(k=>{
+    const lvl=G.unlocked[k];
+    ASPECTS[k].abilities.forEach((ab,i)=>{ if(i<=lvl && ab.aff) G.afflictionsKnown.add(ab.aff[0]); });
+  });
+}
+function stats(){ // effective attributes
+  const s={...G.base};
+  // level scaling: bonded attrs grow with level (essence use)
+  return s;
+}
+function recalcStats(full){
+  const s=stats();
+  G.maxhp = 42 + (G.level-1)*7 + s.power*3 + s.recovery*2;
+  G.maxmp = 18 + s.spirit*4 + Math.floor((G.level-1)*1.5);
+  if(full){ G.hp=G.maxhp; G.mp=G.maxmp; }
+  G.hp=clamp(G.hp,0,G.maxhp); G.mp=clamp(G.mp,0,G.maxmp);
+}
+
+/* ---------- SAVE / LOAD ---------- */
+function save(){
+  try{
+    const d={...G};
+    d.afflictionsKnown=[...G.afflictionsKnown];
+    d.convergence={key:G.convergence.key};
+    localStorage.setItem(SAVE_KEY, JSON.stringify(d));
+  }catch(e){}
+}
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem(SAVE_KEY));
+    if(!d) return false;
+    G=d;
+    G.afflictionsKnown=new Set(d.afflictionsKnown||[]);
+    G.convergence=convergenceFor(d.aspects);
+    if(G.combat) G.combat=null; // never resume mid-fight
+    recalcStats(false);
+    return true;
+  }catch(e){ return false; }
+}
+function hasSave(){ try{return !!localStorage.getItem(SAVE_KEY);}catch(e){return false;} }
+
+/* ===================================================================
+   SCREEN ROUTING
+   =================================================================== */
+function show(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("show"));
+  $(id).classList.add("show");
+  window.scrollTo(0,0);
+}
+function toast(msg){
+  const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1600);
+}
+function floatText(x,y,txt,color){
+  const f=document.createElement("div"); f.className="float"; f.textContent=txt;
+  f.style.left=x+"px"; f.style.top=y+"px"; f.style.color=color||"var(--bright)";
+  document.body.appendChild(f); setTimeout(()=>f.remove(),1000);
+}
+
+/* ===================================================================
+   THE INDEX (status hud)
+   =================================================================== */
+function hudHTML(){
+  const s=stats();
+  const rank=RANKS[G.rankIdx], rc=RANK_COLOR[G.rankIdx];
+  const conv=G.convergence;
+  return `
+  <div class="card" style="padding:9px 11px">
+    <div class="row" style="align-items:center;justify-content:space-between">
+      <div>
+        <span style="font-weight:800;color:var(--bright)">Riftborn</span>
+        <span class="pill" style="border-color:${rc};color:${rc}">${rank} · Lv ${G.level}</span>
+      </div>
+      <div class="pill">${conv.icon} <b>${conv.name}</b></div>
+    </div>
+    <div class="row" style="margin-top:7px;gap:6px">
+      <div class="bar" style="flex:1.3"><i style="width:${G.hp/G.maxhp*100}%;background:var(--hp)"></i><span>HP ${G.hp}/${G.maxhp}</span></div>
+      <div class="bar" style="flex:1"><i style="width:${G.mp/G.maxmp*100}%;background:var(--mp)"></i><span>MP ${G.mp}/${G.maxmp}</span></div>
+    </div>
+    <div class="bar" style="margin-top:6px"><i style="width:${G.xp/G.xpNext*100}%;background:var(--xp)"></i><span>XP ${G.xp}/${G.xpNext}</span></div>
+    <div class="stchips" style="margin-top:7px">
+      ${ATTRS.map(a=>`<span class="stat ${ATTR_CLASS[a]}">${ATTR_LABEL[a]} <b>${s[a]}</b></span>`).join("")}
+      <span class="stat">💠 <b>${G.shards}</b></span>
+      <span class="stat">🔷 <b>${G.cores}</b></span>
+      <span class="stat">📜 <b>${G.glyphs}</b></span>
+      <span class="stat">👥 <b>${G.echoes.length}</b></span>
+    </div>
+  </div>`;
+}
+function renderHud(){ ["hud","hud2","hud3"].forEach(id=>{ if($(id)) $(id).innerHTML=hudHTML(); }); }
+
+/* ===================================================================
+   MAP GENERATION (Slay-the-Spire-lite branching path)
+   =================================================================== */
+function genMap(){
+  const rows=6;
+  const types=["combat","combat","combat","elite","treasure","rest"];
+  const map=[];
+  for(let r=0;r<rows;r++){
+    const count = r===0?1 : (r===rows-1?1 : 2+rnd(2));
+    const row=[];
+    for(let i=0;i<count;i++){
+      let t;
+      if(r===rows-1) t="boss";
+      else if(r===0) t="combat";
+      else t = pick(types);
+      row.push({type:t, r, i, done:false});
+    }
+    map.push(row);
+  }
+  // edges: each node connects to 1-2 nodes in next row
+  for(let r=0;r<rows-1;r++){
+    map[r].forEach(n=>{
+      const next=map[r+1];
+      const a=rnd(next.length);
+      n.to=[a];
+      if(next.length>1 && Math.random()<0.5){ let b=rnd(next.length); if(b!==a) n.to.push(b); }
+    });
+  }
+  G.map=map; G.mapPos={r:-1,i:0};
+}
+const NODE_ICON={combat:"⚔️",elite:"☠️",treasure:"🎁",rest:"🔥",boss:"👑"};
+function renderMap(){
+  renderHud();
+  const cont=$("map"); cont.innerHTML="";
+  G.map.forEach((row,r)=>{
+    const div=document.createElement("div"); div.className="maprow";
+    row.forEach((n,i)=>{
+      const el=document.createElement("div"); el.className="node";
+      el.textContent=NODE_ICON[n.type];
+      const avail = isAvailable(n);
+      if(G.mapPos.r===r && G.mapPos.i===i) el.classList.add("cur");
+      if(n.done) el.classList.add("done");
+      if(avail){ el.classList.add("avail"); el.onclick=()=>enterNode(n); }
+      div.appendChild(el);
+    });
+    cont.appendChild(div);
+  });
+}
+function isAvailable(n){
+  if(n.done) return false;
+  if(G.mapPos.r===-1) return n.r===0;
+  if(n.r!==G.mapPos.r+1) return false;
+  const cur=G.map[G.mapPos.r][G.mapPos.i];
+  return cur.to && cur.to.includes(n.i);
+}
+function enterNode(n){
+  G.mapPos={r:n.r,i:n.i};
+  if(n.type==="combat") startCombat("normal");
+  else if(n.type==="elite") startCombat("elite");
+  else if(n.type==="boss") startCombat("boss");
+  else if(n.type==="treasure") openTreasure(n);
+  else if(n.type==="rest") openRest(n);
+}
+function markNodeDone(){ const n=G.map[G.mapPos.r][G.mapPos.i]; if(n) n.done=true; }
+
+/* ===================================================================
+   COMBAT ENGINE
+   =================================================================== */
+function rankScale(){ return 1 + G.rankIdx*0.55 + (G.gateNum-1)*0.12; }
+function makeEnemy(tpl){
+  const sc=rankScale();
+  const hp=Math.round(tpl.base*sc);
+  return {name:tpl.name, em:tpl.em, hp, maxhp:hp,
+    dmg:Math.round(tpl.dmg*(0.85+sc*0.25)), onhit:tpl.onhit||null,
+    affl:{}, intent:null, dead:false};
+}
+function startCombat(kind){
+  let enemies=[];
+  if(kind==="normal"){ const n=1+rnd(3); for(let i=0;i<n;i++) enemies.push(makeEnemy(pick(ENEMY_POOL))); }
+  else if(kind==="elite"){ enemies.push(makeEnemy(pick(ELITE_POOL))); if(Math.random()<0.5) enemies.push(makeEnemy(pick(ENEMY_POOL))); }
+  else if(kind==="boss"){ enemies.push(makeEnemy(SOVEREIGNS[Math.min(G.rankIdx,SOVEREIGNS.length-1)])); }
+  G.combat={kind, enemies, target:0, turn:1, playerAffl:{}, shield:0, dodge:0, regen:0, extraAction:false, pendingExtract:null};
+  G.echoes.forEach(e=>e.deployed=false);
+  $("log").innerHTML="";
+  log("sys",`A ${kind==="boss"?"SOVEREIGN":kind==="elite"?"elite":"pack"} bars your path.`);
+  rollEnemyIntents();
+  show("scr-combat");
+  renderCombat();
+}
+function aliveEnemies(){ return G.combat.enemies.filter(e=>!e.dead); }
+function currentTarget(){
+  const c=G.combat;
+  if(c.enemies[c.target] && !c.enemies[c.target].dead) return c.target;
+  const idx=c.enemies.findIndex(e=>!e.dead); c.target=idx; return idx;
+}
+
+function logEl(){return $("log");}
+function log(cls,msg){
+  const d=document.createElement("div"); d.className="l-"+cls; d.innerHTML=msg;
+  logEl().prepend(d);
+  while(logEl().children.length>40) logEl().lastChild.remove();
+}
+
+/* ----- affliction helpers ----- */
+function addAffl(holder, key, stacks){
+  const a=holder.affl;
+  if(!a[key]) a[key]={stacks:0, power:stats().power};
+  a[key].stacks+=stacks;
+  a[key].power=stats().power;
+}
+function tickAfflictions(holder, label){
+  const a=holder.affl; let total=0; const conv=G.convergence;
+  for(const key in a){
+    const t=a[key]; const def=AFFLICTIONS[key];
+    let dmg=def.tick(t);
+    // PYRE passive: +1 per stack on DoT
+    if(conv.name==="PYRE" && dmg>0) dmg+=t.stacks;
+    if(dmg>0){ total+=dmg; }
+    // doom detonation
+    if(key==="doom" && t.stacks>=def.detonateAt){
+      const blast=def.blast(t)+ (G.convergence.name==="ENTROPY"&&a.frost?20:0);
+      total+=blast; t.stacks=0; log("aff",`${label} <b>Doom detonates</b> for ${blast}!`);
+      delete a[key]; continue;
+    }
+    // decay
+    t.stacks-=1;
+    if(key==="burn") t.stacks-=1; // burn is short
+    if(t.stacks<=0) delete a[key];
+  }
+  if(total>0){
+    holder.hp-=total;
+    log("aff",`${label} suffers <b>${total}</b> affliction damage.`);
+  }
+  return total;
+}
+function afflBadges(holder){
+  const a=holder.affl; let h="";
+  for(const key in a){
+    const def=AFFLICTIONS[key];
+    h+=`<span class="af ${def.cls}">${def.name} ${a[key].stacks}</span>`;
+  }
+  return h;
+}
+
+/* ----- rendering combat ----- */
+function renderCombat(){
+  renderHud();
+  // enemies
+  const el=$("enemy-list"); el.innerHTML="";
+  G.combat.enemies.forEach((e,idx)=>{
+    const div=document.createElement("div");
+    div.className="enemy"+(idx===G.combat.target&&!e.dead?" target":"")+(e.dead?" dead":"");
+    div.innerHTML=`
+      <div class="emoji">${e.em}</div>
+      <div style="flex:1">
+        <div class="ename">${e.name}</div>
+        <div class="bar" style="margin-top:3px"><i style="width:${Math.max(0,e.hp)/e.maxhp*100}%;background:var(--hp)"></i><span>${Math.max(0,e.hp)}/${e.maxhp}</span></div>
+        <div class="intent">${e.dead?"— slain —":"⟶ "+(e.intent||"")}</div>
+        <div class="afflrow">${afflBadges(e)}</div>
+      </div>`;
+    if(!e.dead) div.onclick=()=>{ G.combat.target=idx; renderCombat(); };
+    el.appendChild(div);
+  });
+  // player afflictions + shield indicator into log header? show as buffs row under hud via toast-less
+  // echoes
+  const eb=$("echo-bar"); eb.innerHTML="";
+  $("echo-cap").textContent=`(deploy up to ${echoCap()})`;
+  if(G.echoes.length===0) eb.innerHTML=`<span class="tiny" style="padding:6px">No echoes yet — defeat foes and <b>Rise</b> them.</span>`;
+  G.echoes.forEach(e=>{
+    const d=document.createElement("div"); d.className="echo"+(e.deployed?" deployed":"");
+    d.innerHTML=`<div class="em">${e.em}</div><div class="nm2">${e.name.slice(0,7)}</div><div class="hp">${e.deployed?"⚔ "+e.dmg:"rest"}</div>`;
+    d.onclick=()=>toggleEcho(e);
+    eb.appendChild(d);
+  });
+  // abilities
+  renderAbilities();
+}
+function echoCap(){ return 1 + Math.floor(stats().spirit/4) + G.rankIdx; }
+function deployedCount(){ return G.echoes.filter(e=>e.deployed).length; }
+function toggleEcho(e){
+  if(e.deployed){ e.deployed=false; }
+  else { if(deployedCount()>=echoCap()){ toast("Echo command full"); return; } e.deployed=true;
+    log("echo",`${e.name} rises to fight at your side.`); }
+  renderCombat();
+}
+
+function playerBuffRow(){
+  const c=G.combat; let h="";
+  if(c.shield>0) h+=`<span class="af buff">Shield ${c.shield}</span>`;
+  if(c.dodge>0) h+=`<span class="af buff">Dodge ${c.dodge}</span>`;
+  if(c.regen>0) h+=`<span class="af buff">Regen ${c.regen}</span>`;
+  for(const key in c.playerAffl){ const def=AFFLICTIONS[key]; h+=`<span class="af ${def.cls}">${def.name} ${c.playerAffl[key].stacks}</span>`; }
+  return h;
+}
+function renderAbilities(){
+  const list=$("ability-list"); list.innerHTML="";
+  // gather available abilities from aspects
+  const buffrow=playerBuffRow();
+  if(buffrow){ const b=document.createElement("div"); b.style.gridColumn="1/3"; b.className="afflrow"; b.innerHTML="<span class='tiny'>You:</span>"+buffrow; list.appendChild(b); }
+  G.aspects.forEach(k=>{
+    const asp=ASPECTS[k];
+    asp.abilities.forEach((ab,i)=>{
+      if(i>G.unlocked[k]) return;
+      const btn=document.createElement("button");
+      btn.className="btn"+(ab.mp===0?"":" ");
+      const afford=G.mp>=ab.mp;
+      if(!afford) btn.disabled=true;
+      btn.innerHTML=`<span style="color:${asp.color}">${asp.icon} ${ab.name}</span><small>${ab.txt}${ab.mp?` · ${ab.mp} MP`:" · free"}</small>`;
+      btn.onclick=()=>useAbility(k,i);
+      list.appendChild(btn);
+    });
+  });
+  // convergence ult
+  const ult=G.convergence.ult;
+  const ubtn=document.createElement("button");
+  ubtn.className="btn gold"; ubtn.style.gridColumn="1/3";
+  if(G.mp<ult.mp) ubtn.disabled=true;
+  ubtn.innerHTML=`<span>${G.convergence.icon} ${ult.name} ✦</span><small>${ult.txt} · ${ult.mp} MP</small>`;
+  ubtn.onclick=()=>useUlt();
+  list.appendChild(ubtn);
+  // end turn / pass
+  const pass=document.createElement("button");
+  pass.className="btn"; pass.style.gridColumn="1/3";
+  pass.innerHTML=`<span>⏭ End Turn</span><small>let afflictions &amp; echoes do the work</small>`;
+  pass.onclick=()=>{ enemyPhase(); };
+  list.appendChild(pass);
+}
+
+/* ----- using abilities ----- */
+function spend(mp){ G.mp-=mp; }
+function useAbility(k,i){
+  const ab=ASPECTS[k].abilities[i]; const s=stats(); const c=G.combat;
+  if(G.mp<ab.mp){ toast("Not enough MP"); return; }
+  spend(ab.mp);
+  const tIdx=currentTarget(); const tgt=c.enemies[tIdx];
+  let acted=true;
+  switch(ab.kind){
+    case "strike": {
+      let d=ab.dmg(s); d=applyConvBonus(tgt,d);
+      damageEnemy(tgt,d,ASPECTS[k].name);
+      if(ab.aff && !tgt.dead) { addAffl(tgt,ab.aff[0],ab.aff[1]); log("aff",`${tgt.name} gains ${ab.aff[1]} ${AFFLICTIONS[ab.aff[0]].name}.`); }
+      break; }
+    case "drain": {
+      let d=ab.dmg(s); d=applyConvBonus(tgt,d);
+      damageEnemy(tgt,d,ASPECTS[k].name);
+      if(ab.heal){ const h=Math.round(d*ab.heal); G.hp=clamp(G.hp+h,0,G.maxhp); log("good",`You drain ${h} life.`); }
+      if(ab.mpburn && !tgt.dead){ log("dim",`${tgt.name}'s resolve frays.`); }
+      break; }
+    case "aoe": {
+      aliveEnemies().forEach(e=>{
+        if(ab.dmg){ let d=ab.dmg(s); d=applyConvBonus(e,d); damageEnemy(e,d,ASPECTS[k].name); }
+        if(ab.aff && !e.dead) addAffl(e,ab.aff[0],ab.aff[1]);
+      });
+      if(ab.aff) log("aff",`All foes gain ${ab.aff[1]} ${AFFLICTIONS[ab.aff[0]].name}.`);
+      break; }
+    case "buff": {
+      if(ab.buff[0]==="shield"){ c.shield+=ab.shield(s); log("good",`You raise a shield (${c.shield}).`); }
+      if(ab.buff[0]==="dodge"){ c.dodge+=ab.buff[1]; log("good",`You blur — Dodge ${c.dodge}.`); }
+      if(ab.buff[0]==="regen"){ c.regen+=ab.buff[1]; log("good",`Regeneration courses through you.`); }
+      if(ab.extra) c.extraAction=true;
+      break; }
+    case "summon": {
+      const base=ECHO_BASE[ab.echo];
+      const e={id:"e"+(G.echoSeq++),name:base.name,em:base.em,hp:base.hp,maxhp:base.hp,dmg:base.dmg+Math.floor(s.speed/2),aff:base.aff,deployed:true};
+      if(deployedCount()>echoCap()) e.deployed=false;
+      G.echoes.push(e); log("echo",`You conjure a ${base.name}.`);
+      break; }
+    case "execute": { // exsanguinate: detonate bleed
+      let total=0;
+      aliveEnemies().forEach(e=>{
+        if(e.affl.bleed){ const b=e.affl.bleed.stacks*3*(1+s.power*0.3); const dmg=Math.round(b*3); damageEnemy(e,dmg,"Blood"); delete e.affl.bleed; total+=dmg; }
+      });
+      log("aff",`Exsanguinate erupts for ${total} total!`);
+      break; }
+    case "spread": { // fester: double venom
+      if(tgt.affl.poison){ tgt.affl.poison.stacks*=2; log("aff",`${tgt.name}'s Venom festers to ${tgt.affl.poison.stacks}!`); }
+      else { toast("No Venom to fester"); G.mp+=ab.mp; acted=false; }
+      break; }
+  }
+  if(acted){ afterPlayerAction(); }
+  else renderCombat();
+}
+function applyConvBonus(tgt,d){
+  if(G.convergence.name==="ENTROPY" && tgt.affl.frost) return Math.round(d*1.5);
+  return d;
+}
+function useUlt(){
+  const ult=G.convergence.ult, s=stats(), c=G.combat;
+  if(G.mp<ult.mp){ toast("Not enough MP"); return; }
+  spend(ult.mp);
+  const nm=G.convergence.name;
+  if(nm==="DOOM"){
+    let total=0;
+    aliveEnemies().forEach(e=>{
+      let sum=0; for(const key in e.affl){ sum+=e.affl[key].stacks; }
+      const dmg=Math.round((10+sum*6)*(1+s.power*0.2)); damageEnemy(e,dmg,"Doom"); e.affl={}; total+=dmg;
+    });
+    log("aff",`<b>Reaper's Verdict</b> detonates everything for ${total}!`);
+  } else if(nm==="PYRE"){
+    aliveEnemies().forEach(e=>addAffl(e,"burn",6));
+    log("aff",`<b>Funeral Pyre</b>: 6 Burn to all.`);
+  } else if(nm==="ENTROPY"){
+    aliveEnemies().forEach(e=>{ addAffl(e,"frost",2); addAffl(e,"doom",3); });
+    log("aff",`<b>Heat Death</b>: Frost + 3 Doom to all.`);
+  } else {
+    aliveEnemies().forEach(e=>{ G.afflictionsKnown.forEach(a=>addAffl(e,a,2)); });
+    log("aff",`<b>Confluence Burst</b>: every affliction, on everyone.`);
+  }
+  afterPlayerAction();
+}
+function damageEnemy(e,dmg,src){
+  e.hp-=dmg;
+  log("good",`${src} hits ${e.name} for <b>${dmg}</b>.`);
+  if(e.hp<=0 && !e.dead){ killEnemy(e); }
+}
+function killEnemy(e){
+  e.dead=true; e.affl={};
+  log("good",`${e.name} falls.`);
+  // Convergence on-kill passives
+  if(G.convergence.name==="DOOM"){ G.mp=clamp(G.mp+2,0,G.maxmp); G.combat.dodge+=1; }
+  if(G.convergence.key && G.convergence.passive && G.convergence.passive.includes("4 MP")) G.mp=clamp(G.mp+4,0,G.maxmp);
+  // extraction prompt
+  offerExtract(e);
+}
+
+/* ----- after player acts: extra action or enemy phase ----- */
+function afterPlayerAction(){
+  recalcStats(false);
+  if(aliveEnemies().length===0){ renderCombat(); setTimeout(winCombat,350); return; }
+  if(G.combat.extraAction){ G.combat.extraAction=false; log("sys","Shadowstep — you act again."); renderCombat(); return; }
+  renderCombat();
+  setTimeout(enemyPhase,260);
+}
+
+/* ----- enemy phase ----- */
+function rollEnemyIntents(){
+  aliveEnemies().forEach(e=>{
+    // frozen?
+    if(e.affl.frost && Math.random()<0.4){ e.intent="frozen (may skip)"; e._maybeSkip=true; }
+    else { e._maybeSkip=false;
+      const opts=["attack"];
+      if(e.onhit) opts.push("afflict");
+      e._move=pick(opts);
+      e.intent = e._move==="afflict" ? `${e.name==""?"":""}strike + ${AFFLICTIONS[e.onhit[0]].name}` : `attack ${e.dmg}`;
+    }
+  });
+}
+function enemyPhase(){
+  const c=G.combat;
+  // first: tick afflictions on all enemies (start of round resolution)
+  aliveEnemies().forEach(e=>{ tickAfflictions(e, e.name); if(e.hp<=0&&!e.dead) killEnemy(e); });
+  if(aliveEnemies().length===0){ renderCombat(); setTimeout(winCombat,350); return; }
+  // enemies act
+  let dmgToPlayer=0;
+  aliveEnemies().forEach(e=>{
+    if(e._maybeSkip && Math.random()<0.5){ log("dim",`${e.name} is frozen solid.`); return; }
+    let dmg=e.dmg;
+    if(e.affl.weak) dmg=Math.round(dmg*0.65);
+    // player dodge
+    if(c.dodge>0){ c.dodge--; log("good",`You dodge ${e.name}'s strike.`); return; }
+    // shield
+    if(c.shield>0){ const ab=Math.min(c.shield,dmg); c.shield-=ab; dmg-=ab; }
+    if(dmg>0){ G.hp-=dmg; dmgToPlayer+=dmg; }
+    if(e._move==="afflict" && e.onhit){ addPlayerAffl(e.onhit[0],e.onhit[1]); }
+  });
+  if(dmgToPlayer>0) log("bad",`You take <b>${dmgToPlayer}</b> damage.`);
+  // player afflictions tick
+  tickPlayerAfflictions();
+  // echoes attack
+  echoPhase();
+  // regen
+  if(c.regen>0){ const h=4+stats().recovery; G.hp=clamp(G.hp+h,0,G.maxhp); c.regen--; log("good",`Regen restores ${h}.`); }
+  // baseline recovery
+  const mpRegen=2+Math.floor(stats().recovery/2); G.mp=clamp(G.mp+mpRegen,0,G.maxmp);
+  recalcStats(false);
+  if(G.hp<=0){ renderCombat(); setTimeout(loseGame,300); return; }
+  if(aliveEnemies().length===0){ renderCombat(); setTimeout(winCombat,350); return; }
+  c.turn++; rollEnemyIntents(); renderCombat();
+}
+function addPlayerAffl(key,stacks){
+  const c=G.combat;
+  // recovery shortens incoming afflictions
+  if(stats().recovery>=6 && Math.random()<0.3){ log("good",`Your Recovery shrugs off the ${AFFLICTIONS[key].name}.`); return; }
+  if(!c.playerAffl[key]) c.playerAffl[key]={stacks:0,power:4};
+  c.playerAffl[key].stacks+=stacks;
+  log("bad",`You are afflicted: ${stacks} ${AFFLICTIONS[key].name}.`);
+}
+function tickPlayerAfflictions(){
+  const c=G.combat; let total=0;
+  for(const key in c.playerAffl){
+    const t=c.playerAffl[key]; const def=AFFLICTIONS[key];
+    let dmg=def.tick(t); if(dmg>0) total+=dmg;
+    t.stacks--; if(key==="burn") t.stacks--; if(t.stacks<=0) delete c.playerAffl[key];
+  }
+  if(total>0){ G.hp-=total; log("bad",`Afflictions gnaw you for ${total}.`); }
+}
+function echoPhase(){
+  const c=G.combat; const dep=G.echoes.filter(e=>e.deployed);
+  if(dep.length===0) return;
+  dep.forEach(echo=>{
+    const targets=aliveEnemies(); if(!targets.length) return;
+    const tgt=pick(targets);
+    let d=echo.dmg + (G.convergence.name==="DOOM"?1:0);
+    tgt.hp-=d; log("echo",`${echo.name} (echo) strikes ${tgt.name} for ${d}.`);
+    if(echo.aff) addAffl(tgt,echo.aff,1);
+    if(tgt.hp<=0&&!tgt.dead) killEnemy(tgt);
+  });
+}
+
+/* ----- extraction (Rise) ----- */
+function offerExtract(e){
+  // Only offer if there's room or always allow (store grows)
+  const tpl={name:e.name, em:e.em, maxhp:e.maxhp, dmg:e.dmg, onhit:e.onhit};
+  showOverlay(`
+    <h2 class="center">${e.em} ${e.name} has fallen</h2>
+    <div class="sub">Its shade lingers at the threshold of the Index.</div>
+    <div class="divider"></div>
+    <div class="tiny center">Extract it as an <b>Echo</b> — a soldier that fights for you?<br>
+    Echo would deal <b>${Math.max(3,Math.round(e.dmg*0.7))}</b> dmg${e.onhit?` + ${AFFLICTIONS[e.onhit[0]].name}`:""}.</div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn gold" style="flex:1" id="ov-rise">⬆ "Rise."</button>
+      <button class="btn" style="flex:1" id="ov-skip">Leave it</button>
+    </div>`);
+  $("ov-rise").onclick=()=>{ const echo=echoFromEnemy(tpl); G.echoes.push(echo); log("echo",`You command: <b>"Rise."</b> ${e.name} joins your army.`); closeOverlay(); renderCombat(); };
+  $("ov-skip").onclick=()=>{ closeOverlay(); renderCombat(); };
+}
+
+/* ----- win / rewards ----- */
+function winCombat(){
+  const c=G.combat; const kind=c.kind;
+  markNodeDone();
+  // rewards
+  let xp = (kind==="boss"?40:kind==="elite"?22:12) + G.combat.turn + rnd(6);
+  let shards = (kind==="boss"?30:kind==="elite"?14:6)+rnd(6);
+  let cores = kind==="boss"?3:kind==="elite"?1:(Math.random()<0.4?1:0);
+  G.xp+=xp; G.shards+=shards; G.cores+=cores;
+  // quest progress
+  questProgress("clear", kind);
+  let levelMsgs=[];
+  while(G.xp>=G.xpNext){ G.xp-=G.xpNext; levelUp(levelMsgs); }
+  // restore a little between fights
+  G.hp=clamp(G.hp+Math.round(G.maxhp*0.12),0,G.maxhp);
+  G.mp=clamp(G.mp+Math.round(G.maxmp*0.25),0,G.maxmp);
+  G.combat=null;
+  save();
+  const boss = kind==="boss";
+  showOverlay(`
+    <h2 class="center">${boss?"👑 Sovereign Slain":"Victory"}</h2>
+    <div class="center" style="margin:8px 0">
+      <span class="pill">+${xp} XP</span> <span class="pill">+${shards} 💠</span> ${cores?`<span class="pill">+${cores} 🔷</span>`:""}
+    </div>
+    ${levelMsgs.length?`<div class="card" style="background:#1d1a10;border-color:#5a4d1f">${levelMsgs.join("<br>")}</div>`:""}
+    ${boss?`<div class="divider"></div><div class="center">${bossRewardHTML()}</div>`:""}
+    <button class="btn gold wide" style="margin-top:12px" id="ov-cont">Continue</button>`);
+  $("ov-cont").onclick=()=>{ closeOverlay(); if(boss) advanceGate(); else { show("scr-map"); renderMap(); } };
+}
+function bossRewardHTML(){
+  // boss grants a glyph and rank up
+  G.glyphs+=1;
+  if(G.rankIdx<RANKS.length-1){ G.rankIdx++; return `<b style="color:${RANK_COLOR[G.rankIdx]}">You advance to ${RANKS[G.rankIdx]} rank!</b><br><span class="tiny">+1 Glyph 📜 · stronger gates await</span>`; }
+  return `<b style="color:var(--mag)">You stand at the peak: Astral rank.</b><br><span class="tiny">+1 Glyph 📜</span>`;
+}
+function levelUp(msgs){
+  G.level++; G.xpNext=Math.round(G.xpNext*1.35+8);
+  // bonded attributes grow (essence use)
+  const grew={};
+  G.aspects.forEach(k=>{ const a=ASPECTS[k].attr; G.base[a]+=1; grew[a]=(grew[a]||0)+1; });
+  // small all-around every 3 levels
+  if(G.level%3===0){ G.base.spirit+=1; grew.spirit=(grew.spirit||0)+1; }
+  recalcStats(false); G.hp=G.maxhp; // heal on level up
+  const gs=Object.keys(grew).map(a=>`+${grew[a]} ${ATTR_LABEL[a]}`).join(", ");
+  msgs.push(`<b>Level ${G.level}!</b> ${gs}. Fully healed.`);
+}
+
+/* ===================================================================
+   TREASURE / REST NODES
+   =================================================================== */
+function openTreasure(n){
+  markNodeDone();
+  const roll=Math.random();
+  let body, reward;
+  if(roll<0.5){ const amt=12+rnd(20); G.shards+=amt; reward=`💠 ${amt} shards`; }
+  else if(roll<0.8){ G.glyphs+=1; reward=`📜 1 Glyph (unlock an ability in Town)`; }
+  else { const amt=2+rnd(2); G.cores+=amt; reward=`🔷 ${amt} cores`; }
+  save();
+  showOverlay(`<h2 class="center">🎁 Cache</h2><div class="center" style="margin:10px 0">You found <b>${reward}</b>.</div>
+    <button class="btn gold wide" id="ov-cont">Take it</button>`);
+  $("ov-cont").onclick=()=>{ closeOverlay(); show("scr-map"); renderMap(); };
+}
+function openRest(n){
+  markNodeDone();
+  showOverlay(`<h2 class="center">🔥 Wayshrine</h2><div class="sub">A pocket of calm in the gate.</div>
+    <div class="col" style="margin-top:12px">
+      <button class="btn" id="ov-heal">💤 Rest — heal 50% HP/MP</button>
+      <button class="btn" id="ov-quest">📜 Attune — reroll System Quest</button>
+      <button class="btn" id="ov-meditate">🧘 Meditate — +6 MP now &amp; gain 1 Glyph if quest done</button>
+    </div>
+    <div class="divider"></div>
+    <button class="btn wide" id="ov-leave">Move on</button>`);
+  const done=()=>{ closeOverlay(); show("scr-map"); renderMap(); save(); };
+  $("ov-heal").onclick=()=>{ G.hp=clamp(G.hp+Math.round(G.maxhp*0.5),0,G.maxhp); G.mp=clamp(G.mp+Math.round(G.maxmp*0.5),0,G.maxmp); toast("Rested."); done(); };
+  $("ov-quest").onclick=()=>{ rollQuest(); toast("New System Quest."); done(); };
+  $("ov-meditate").onclick=()=>{ G.mp=clamp(G.mp+6,0,G.maxmp); if(G.questDoneToday){ G.glyphs++; toast("+6 MP, +1 Glyph"); } else toast("+6 MP"); done(); };
+  $("ov-leave").onclick=done;
+}
+
+/* ===================================================================
+   GATES / TOWN
+   =================================================================== */
+function advanceGate(){
+  G.gateNum++;
+  // back to town
+  enterTown();
+}
+function enterTown(){
+  save();
+  show("scr-town");
+  renderHud();
+  renderTown();
+}
+function renderTown(){
+  const body=$("town-body");
+  // upgrade abilities with glyphs
+  let glyphRows="";
+  G.aspects.forEach(k=>{
+    const asp=ASPECTS[k]; const cur=G.unlocked[k]; const next=asp.abilities[cur+1];
+    if(next){
+      glyphRows+=`<div class="row" style="align-items:center;justify-content:space-between;margin:4px 0">
+        <div style="font-size:12px"><span style="color:${asp.color}">${asp.icon} ${next.name}</span> <span class="tiny">— ${next.txt}</span></div>
+        <button class="btn ${G.glyphs>0?'gold':''}" ${G.glyphs>0?"":"disabled"} data-glyph="${k}">📜 Unlock</button></div>`;
+    } else {
+      glyphRows+=`<div class="tiny" style="margin:4px 0">${asp.icon} ${asp.name} — all abilities unlocked ✓</div>`;
+    }
+  });
+  body.innerHTML=`
+    <h3>Glyphs — unlock abilities <span class="pill">📜 ${G.glyphs}</span></h3>
+    ${glyphRows}
+    <div class="divider"></div>
+    <h3>Forge — spend cores 🔷 ${G.cores}</h3>
+    <div class="row" style="margin:4px 0">
+      <button class="btn" style="flex:1" id="forge-xp" ${G.cores>0?"":"disabled"}>🔷→XP<small>+15 XP per core (×2)</small></button>
+      <button class="btn" style="flex:1" id="forge-attr" ${G.cores>=3?"":"disabled"}>🔷×3 → +1 attr<small>permanent SPR</small></button>
+    </div>
+    <div class="divider"></div>
+    <h3>Market — 💠 ${G.shards}</h3>
+    <div class="row" style="margin:4px 0">
+      <button class="btn" style="flex:1" id="buy-glyph" ${G.shards>=40?"":"disabled"}>Buy Glyph<small>40 💠 → 📜</small></button>
+      <button class="btn" style="flex:1" id="buy-core" ${G.shards>=25?"":"disabled"}>Buy Core<small>25 💠 → 🔷</small></button>
+    </div>
+    <div class="divider"></div>
+    <h3>Echo Army (${G.echoes.length})</h3>
+    <div class="echobar">${G.echoes.length?G.echoes.map(e=>`<div class="echo"><div class="em">${e.em}</div><div class="nm2">${e.name.slice(0,7)}</div><div class="hp">⚔ ${e.dmg}</div></div>`).join(""):'<span class="tiny" style="padding:6px">none yet</span>'}</div>
+    <div class="divider"></div>
+    <div class="card" id="town-quest"></div>`;
+  body.querySelectorAll("[data-glyph]").forEach(b=>b.onclick=()=>{ const k=b.dataset.glyph; if(G.glyphs>0){ G.glyphs--; G.unlocked[k]++; recomputeKnownAfflictions(); toast("Ability unlocked!"); renderTown(); renderHud(); save(); } });
+  $("forge-xp").onclick=()=>{ if(G.cores>0){ G.cores--; G.xp+=15; let m=[]; while(G.xp>=G.xpNext){G.xp-=G.xpNext;levelUp(m);} toast("+15 XP"+(m.length?" — Level up!":"")); renderTown(); renderHud(); save(); } };
+  $("forge-attr").onclick=()=>{ if(G.cores>=3){ G.cores-=3; G.base.spirit++; recalcStats(false); toast("+1 Spirit (permanent)"); renderTown(); renderHud(); save(); } };
+  $("buy-glyph").onclick=()=>{ if(G.shards>=40){ G.shards-=40; G.glyphs++; toast("Bought a Glyph"); renderTown(); renderHud(); save(); } };
+  $("buy-core").onclick=()=>{ if(G.shards>=25){ G.shards-=25; G.cores++; toast("Bought a Core"); renderTown(); renderHud(); save(); } };
+  $("town-quest").innerHTML=questHTML();
+}
+
+/* ===================================================================
+   SYSTEM QUEST (daily quest flavor)
+   =================================================================== */
+const QUESTS=[
+  {id:"clear3", txt:"Clear 3 encounters", goal:3, type:"clear", reward:()=>{G.glyphs++;return"📜 1 Glyph";}},
+  {id:"boss", txt:"Slay a Sovereign", goal:1, type:"boss", reward:()=>{G.cores+=2;return"🔷 2 Cores";}},
+  {id:"elite2", txt:"Defeat 2 elites", goal:2, type:"elite", reward:()=>{G.shards+=40;return"💠 40 Shards";}},
+];
+function rollQuest(){ const q=pick(QUESTS); G.quest={...q, prog:0}; G.questDoneToday=false; }
+function questProgress(type,kind){
+  const q=G.quest; if(!q||G.questDoneToday) return;
+  let hit=false;
+  if(q.type==="clear") hit=true;
+  else if(q.type==="boss" && kind==="boss") hit=true;
+  else if(q.type==="elite" && kind==="elite") hit=true;
+  if(hit){ q.prog++; if(q.prog>=q.goal){ const r=q.reward(); G.questDoneToday=true; setTimeout(()=>toast("System Quest complete: "+r),700); } }
+}
+function questHTML(){
+  const q=G.quest; if(!q) return "";
+  return `<h3 style="margin-top:0">📋 System Quest</h3>
+    <div style="font-size:13px;color:var(--bright)">${q.txt}</div>
+    <div class="bar" style="margin-top:6px"><i style="width:${clamp(q.prog/q.goal*100,0,100)}%;background:var(--xp)"></i><span>${Math.min(q.prog,q.goal)}/${q.goal}${G.questDoneToday?" ✓":""}</span></div>
+    <div class="tiny" style="margin-top:4px">Reward on completion. ${G.questDoneToday?"<span class='l-good'>Claimed.</span>":"Skipping quests is allowed — but the Index rewards diligence."}</div>`;
+}
+
+/* ===================================================================
+   GATE START
+   =================================================================== */
+function startGate(){
+  genMap();
+  // re-roll a quest each new gate if previous was done
+  if(G.questDoneToday) rollQuest();
+  show("scr-map"); renderMap(); save();
+}
+
+/* ===================================================================
+   OVERLAYS / LOSE
+   =================================================================== */
+function showOverlay(html){ $("overlay-box").innerHTML=html; $("overlay").classList.add("show"); }
+function closeOverlay(){ $("overlay").classList.remove("show"); }
+function loseGame(){
+  showOverlay(`<h2 class="center" style="color:var(--red)">You have fallen</h2>
+    <div class="sub">The gate claims another Riftborn. The Index goes dark.</div>
+    <div class="center" style="margin:12px 0">
+      <div class="tiny">Reached ${RANKS[G.rankIdx]} rank · Level ${G.level} · Gate ${G.gateNum}</div>
+    </div>
+    <button class="btn gold wide" id="ov-restart">Begin anew</button>`);
+  $("ov-restart").onclick=()=>{ try{localStorage.removeItem(SAVE_KEY);}catch(e){} closeOverlay(); show("scr-title"); refreshTitle(); };
+}
+
+/* ===================================================================
+   WIRING
+   =================================================================== */
+let pendingAspects=[];
+function refreshTitle(){ $("btn-continue").style.display=hasSave()?"block":"none"; }
+
+function renderAspectPicker(){
+  const list=$("aspect-list"); list.innerHTML="";
+  ASPECT_KEYS.forEach(k=>{
+    const a=ASPECTS[k];
+    const sel=pendingAspects.includes(k);
+    const card=document.createElement("button");
+    card.className="card aspect"+(sel?" sel":"");
+    card.innerHTML=`<div class="glyph" style="background:${a.color}22;color:${a.color}">${a.icon}</div>
+      <div><div class="nm">${a.name} <span class="at">· bonds ${ATTR_LABEL[a.attr]}</span></div>
+      <div class="ds">${a.desc}</div>
+      <div class="tiny" style="margin-top:3px">First ability: <b>${a.abilities[0].name}</b> — ${a.abilities[0].txt}</div></div>`;
+    card.onclick=()=>{
+      if(sel) pendingAspects=pendingAspects.filter(x=>x!==k);
+      else { if(pendingAspects.length>=3){ toast("Three aspects only"); return; } pendingAspects.push(k); }
+      renderAspectPicker();
+    };
+    list.appendChild(card);
+  });
+  const ready=pendingAspects.length===3;
+  $("btn-begin").disabled=!ready;
+  const cbox=$("convergence-box");
+  if(ready){
+    const conv=convergenceFor(pendingAspects);
+    cbox.style.display="block";
+    cbox.innerHTML=`<h3 style="margin-top:0">Convergence formed</h3>
+      <div style="font-size:18px;font-weight:800;color:var(--gold)">${conv.icon} ${conv.name}</div>
+      <div class="tiny" style="margin-top:4px"><b>Passive:</b> ${conv.passive}</div>
+      <div class="tiny"><b>Ultimate:</b> ${conv.ult.name} — ${conv.ult.txt}</div>`;
+  } else { cbox.style.display="none"; }
+}
+
+window.addEventListener("DOMContentLoaded",()=>{
+  refreshTitle();
+  $("btn-new").onclick=()=>{ pendingAspects=[]; renderAspectPicker(); show("scr-create"); };
+  $("btn-continue").onclick=()=>{ if(load()){ if(G.combat) G.combat=null; enterTown(); } else toast("No save found"); };
+  $("btn-how").onclick=()=>{
+    showOverlay(`<h2 class="center">How to Play</h2>
+      <div style="font-size:12.5px;line-height:1.55">
+      <p><b>1. Bind 3 Aspects</b> → they fuse into a <b>Convergence</b> with an ultimate.</p>
+      <p><b>2. The Index</b> is your status window: HP, MP, Level, Rank, attributes.</p>
+      <p><b>3. Enter the Gate</b> and pick a path through combats, elites 🎁 caches, 🔥 shrines, to the 👑 Sovereign.</p>
+      <p><b>4. Combat</b> is turn-based. Stack <b>afflictions</b> (Bleed, Venom, Burn, Doom…) — they tick every turn and <b>Doom detonates</b> at 4 stacks. Tap a foe to target it.</p>
+      <p><b>5. Rise the dead.</b> When an enemy falls, extract it as an <b>Echo</b> that fights for you. Deploy echoes by tapping them.</p>
+      <p><b>6. Spend spoils in Town</b>: 📜 Glyphs unlock new abilities, 🔷 Cores forge levels/attributes, 💠 Shards buy goods.</p>
+      <p><b>7. Beat the Sovereign</b> to rank up: Iron → Bronze → Silver → Gold → Astral.</p>
+      </div>
+      <button class="btn gold wide" id="ov-close">Got it</button>`);
+    $("ov-close").onclick=closeOverlay;
+  };
+  $("btn-back-title").onclick=()=>{ show("scr-title"); refreshTitle(); };
+  $("btn-begin").onclick=()=>{ newGame([...pendingAspects]); enterTown(); };
+
+  $("btn-index").onclick=()=>{
+    const s=stats();
+    showOverlay(`<h2 class="center">📖 The Index</h2>
+      <div class="tiny center">${G.convergence.icon} ${G.convergence.name} — ${G.convergence.passive}</div>
+      <div class="divider"></div>
+      ${ATTRS.map(a=>`<div class="row" style="justify-content:space-between"><span class="${ATTR_CLASS[a]}">${ATTR_LABEL[a]}</span><b>${s[a]}</b></div>`).join("")}
+      <div class="divider"></div>
+      <div class="tiny">PWR raises strike &amp; affliction damage · SPD grants dodge/extra actions · SPR raises MP, potency &amp; echo command (${echoCap()}) · RCV regenerates HP/MP and resists afflictions.</div>
+      <button class="btn gold wide" style="margin-top:12px" id="ov-close">Close</button>`);
+    $("ov-close").onclick=closeOverlay;
+  };
+  $("btn-abandon").onclick=()=>{
+    showOverlay(`<h2 class="center">Return to Town?</h2><div class="sub">You'll leave this gate's remaining rooms behind.</div>
+      <div class="row" style="margin-top:14px"><button class="btn" style="flex:1" id="ov-no">Stay</button><button class="btn gold" style="flex:1" id="ov-yes">To Town</button></div>`);
+    $("ov-no").onclick=closeOverlay;
+    $("ov-yes").onclick=()=>{ closeOverlay(); enterTown(); };
+  };
+  $("btn-enter-gate").onclick=()=>startGate();
+});
+</script>
+</body>
+</html>
