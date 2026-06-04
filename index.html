@@ -223,12 +223,12 @@ const CORR_PER_MUT=100;
 const MUTATIONS=[
   { id:'claws',   good:1, name:'Chaos Claws',  desc:'Wicked claws sprout from your hands. +3 melee damage.' },
   { id:'scales',  good:1, name:'Scaled Hide',  desc:'Hardened scales sheathe you. +2 armor class.' },
-  { id:'brawn',   good:1, name:'Brute Muscle', desc:'Your sinews swell. +2 Strength.', apply:p=>{p.attr.str+=2;} },
+  { id:'brawn',   good:1, name:'Brute Muscle', desc:'Your sinews swell. +2 Strength.', apply:p=>{p.attr.str+=2;}, unapply:p=>{p.attr.str=Math.max(1,p.attr.str-2);} },
   { id:'eyes',    good:1, name:'Night Eyes',   desc:'Your eyes adapt to the dark. +2 sight radius.' },
   { id:'mregen',  good:1, name:'Trollblood',   desc:'Your flesh knits unnaturally fast. Rapid HP regeneration.' },
   { id:'venom',   good:1, name:'Venom Glands', desc:'Your touch drips poison. Your hits envenom foes.' },
-  { id:'frail',   good:0, name:'Brittle Bones',desc:'Your skeleton creaks and cracks. -1 Toughness.', apply:p=>{p.attr.tou=Math.max(1,p.attr.tou-1);} },
-  { id:'feeble',  good:0, name:'Withered Arm', desc:'One arm shrivels. -2 Strength.', apply:p=>{p.attr.str=Math.max(1,p.attr.str-2);} },
+  { id:'frail',   good:0, name:'Brittle Bones',desc:'Your skeleton creaks and cracks. -1 Toughness.', apply:p=>{p.attr.tou=Math.max(1,p.attr.tou-1);}, unapply:p=>{p.attr.tou+=1;} },
+  { id:'feeble',  good:0, name:'Withered Arm', desc:'One arm shrivels. -2 Strength.', apply:p=>{p.attr.str=Math.max(1,p.attr.str-2);}, unapply:p=>{p.attr.str+=2;} },
   { id:'teleport',good:0, name:'Teleportitis', desc:'Reality slips around you — you blink at random.' },
   { id:'hunger',  good:0, name:'Burning Gut',  desc:'A furnace churns within. You hunger far faster.' },
   { id:'manaburn',good:0, name:'Leaking Aura', desc:'Power bleeds from you. -6 maximum mana.' },
@@ -238,31 +238,71 @@ function mutById(id){ return MUTATIONS.find(m=>m.id===id); }
 function hasMut(id){ return S.p && S.p.mutations && S.p.mutations.includes(id); }
 function hasPower(id){ return S.p && S.p.powers && S.p.powers.includes(id); }
 
+/* ---------- Phase 2: identification, intrinsics, artifacts, gods --------- */
+const POTION_LOOKS=['ruby','azure','murky','fizzy','golden','smoky','bubbling','milky','dark','glowing','oily','viscous','crimson','emerald','silvery'];
+const SCROLL_LOOKS=['ZELGO KEK','JUYNED','NR 9','XIXAXA','PRATYAVAYAH','VENZAR FORBRYDERNE','HACKEM MUCHE','ELAM EBOW','READ ME','GHOTI','KIRJE','VELOX NEB'];
+const GODS=['Issaril the Keeper','Mordeth the Unmaker','Varna of the Deep','the Nameless Light','Ssarra Twin-Fanged'];
+const INTRINSICS={ poison_res:'poison resistance', fire_res:'fire resistance', regen:'rapid regeneration', might:'a surge of might' };
+function intrinsicName(id){ return INTRINSICS[id]||id; }
+function applyIntrinsic(id){ const p=S.p;
+  if(id==='poison_res') p.poisonRes=1;
+  else if(id==='fire_res') p.fireRes=1;
+  else if(id==='regen') p.bonRegen+=1;
+  else if(id==='might') p.attr.str+=1;
+}
+function hasFireRes(){ return (S.p.fireRes) || (S.p.armor && S.p.armor.fireRes); }
+
+const ARTIFACTS={
+  whisper:    { id:'whisper',    kind:'weapon', name:'Whisper, the Sundering Blade', g:'/', dmg:'2d6', acc:3, ench:2, artifact:1, val:240 },
+  soulreaver: { id:'soulreaver', kind:'weapon', name:'Soulreaver', g:'/', dmg:'1d10', acc:1, ench:1, artifact:1, lifesteal:1, val:220 },
+  drakescale: { id:'drakescale', kind:'armor',  name:'Drakescale Hauberk', g:'[', ac:8, artifact:1, fireRes:1, val:260 },
+};
+function mkArtifact(id){ return Object.assign({}, ARTIFACTS[id]); }
+function assignAppearances(){
+  S.appear={potions:{},scrolls:{}}; S.known={};
+  const pl=shuffle(POTION_LOOKS.slice()); let i=0; for(const id in POTIONS) S.appear.potions[id]=pl[i++];
+  const sl=shuffle(SCROLL_LOOKS.slice()); i=0; for(const id in SCROLLS) S.appear.scrolls[id]=sl[i++];
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=rnd(i+1); const t=a[i];a[i]=a[j];a[j]=t; } return a; }
+function isKnown(it){ return it.artifact || (S.known && S.known[it.id]); }
+function setKnown(id,announce){ if(S.known && !S.known[id]){ S.known[id]=true; if(announce){ const it=ITEM_DB[id]; if(it) msg('It was '+aOrAn(it.name)+'!','sys'); } } }
+function aOrAn(s){ return (/^[aeiou]/i.test(s)?'an ':'a ')+s; }
+
+/* ---------- Phase 3: town NPCs ---------- */
+const NPCS=[
+  { id:'elder', g:'E', c:'#fd5', name:'Elder Maro' },
+  { id:'healer',g:'H', c:'#7df', name:'the Healer' },
+  { id:'shop',  g:'M', c:'#7e7', name:'the Merchant' },
+  { id:'sage',  g:'G', c:'#9bf', name:'the Sage' },
+  { id:'inn',   g:'I', c:'#fb9', name:'the Innkeeper' },
+];
+const SHOP_STOCK=['healing','greater','mana','ration','ration','teleport','mapping','identify','enchant_w','enchant_a','shortsword','longsword','mace','leather','chainmail'];
+
 // glyph colors
 const COL={ '#':'var(--wall)','.':'var(--floor)','+':'var(--gold)','>':'var(--cyan)','<':'var(--cyan)',
   '@':'var(--white)','$':'var(--gold)','!':'var(--red)','?':'var(--white)','/':'var(--cyan)','[':'var(--blue)',
-  '%':'var(--food)','*':'var(--mag)','=':'var(--gold)' };
+  '%':'var(--food)','*':'var(--mag)','=':'var(--gold)','_':'var(--mag)' };
 
 // Monsters. d = first depth it appears. spd: 'fast' acts twice, 'slow' every other.
 const MONSTERS = [
   { id:'rat',     g:'r', c:'#b78', name:'giant rat',     d:1, hp:'1d4',  acc:8,  def:11, dmg:'1d3', xp:2,  spd:'norm' },
   { id:'bat',     g:'b', c:'#a9c', name:'cave bat',      d:1, hp:'1d4',  acc:10, def:14, dmg:'1d3', xp:3,  spd:'fast', erratic:1 },
   { id:'kobold',  g:'k', c:'#9b7', name:'kobold',        d:1, hp:'1d6',  acc:9,  def:12, dmg:'1d4', xp:3 },
-  { id:'snake',   g:'S', c:'#7c6', name:'cave snake',    d:2, hp:'1d6',  acc:11, def:13, dmg:'1d3', xp:5,  poison:2 },
+  { id:'snake',   g:'S', c:'#7c6', name:'cave snake',    d:2, hp:'1d6',  acc:11, def:13, dmg:'1d3', xp:5,  poison:2, eat:'poison_res' },
   { id:'jackal',  g:'j', c:'#c96', name:'jackal',        d:2, hp:'1d6',  acc:11, def:13, dmg:'1d4', xp:4,  spd:'fast' },
   { id:'goblin',  g:'g', c:'#8c6', name:'goblin',        d:3, hp:'2d4',  acc:12, def:13, dmg:'1d6', xp:6 },
-  { id:'spider',  g:'s', c:'#caa', name:'giant spider',  d:3, hp:'1d8',  acc:13, def:15, dmg:'1d4', xp:7,  poison:3 },
+  { id:'spider',  g:'s', c:'#caa', name:'giant spider',  d:3, hp:'1d8',  acc:13, def:15, dmg:'1d4', xp:7,  poison:3, eat:'poison_res' },
   { id:'orc',     g:'o', c:'#7a5', name:'orc',           d:4, hp:'2d6',  acc:13, def:13, dmg:'1d8', xp:9 },
   { id:'zombie',  g:'z', c:'#9a9', name:'zombie',        d:4, hp:'2d8',  acc:11, def:10, dmg:'1d8', xp:8,  spd:'slow' },
   { id:'gnoll',   g:'G', c:'#b85', name:'gnoll',         d:5, hp:'3d6',  acc:14, def:14, dmg:'1d10',xp:12 },
   { id:'wolf',    g:'w', c:'#aaa', name:'dire wolf',     d:5, hp:'2d8',  acc:14, def:15, dmg:'1d8', xp:11, spd:'fast' },
-  { id:'ogre',    g:'O', c:'#c76', name:'ogre',          d:6, hp:'4d8',  acc:14, def:11, dmg:'2d6', xp:18, spd:'slow' },
+  { id:'ogre',    g:'O', c:'#c76', name:'ogre',          d:6, hp:'4d8',  acc:14, def:11, dmg:'2d6', xp:18, spd:'slow', eat:'might' },
   { id:'skeleton',g:'Z', c:'#dda', name:'skeleton lord', d:6, hp:'3d8',  acc:15, def:15, dmg:'1d10',xp:16 },
   { id:'wraith',  g:'W', c:'#aef', name:'wraith',        d:7, hp:'3d8',  acc:16, def:17, dmg:'2d6', xp:24, drain:1, corrupt:7 },
-  { id:'troll_m', g:'T', c:'#5b5', name:'cave troll',    d:7, hp:'6d8',  acc:16, def:14, dmg:'2d8', xp:30, regen:2 },
+  { id:'troll_m', g:'T', c:'#5b5', name:'cave troll',    d:7, hp:'6d8',  acc:16, def:14, dmg:'2d8', xp:30, regen:2, eat:'regen' },
   { id:'vampire', g:'V', c:'#d6f', name:'vampire',       d:8, hp:'4d8',  acc:17, def:18, dmg:'2d6', xp:34, drain:1, spd:'fast', corrupt:9 },
-  { id:'wyrmlet', g:'d', c:'#f96', name:'fire drake',    d:9, hp:'5d8',  acc:17, def:16, dmg:'2d8', xp:40, breath:'2d6' },
-  { id:'demon',   g:'&', c:'#f55', name:'lesser demon',  d:9, hp:'6d8',  acc:18, def:18, dmg:'3d6', xp:48, corrupt:12 },
+  { id:'wyrmlet', g:'d', c:'#f96', name:'fire drake',    d:9, hp:'5d8',  acc:17, def:16, dmg:'2d8', xp:40, breath:'2d6', eat:'fire_res' },
+  { id:'demon',   g:'&', c:'#f55', name:'lesser demon',  d:9, hp:'6d8',  acc:18, def:18, dmg:'3d6', xp:48, corrupt:12, eat:'fire_res' },
   { id:'wyrm',    g:'D', c:'#fd5', name:'ANCIENT WYRM',  d:99,hp:'12d10',acc:20, def:19, dmg:'3d8', xp:300, breath:'4d6', boss:1, spd:'norm', corrupt:20 },
 ];
 
@@ -299,13 +339,18 @@ const SCROLLS = {
   mapping:  { name:'scroll of magic mapping',g:'?', kind:'scroll', val:18, use:(p)=>{ revealMap(); msg('The dungeon imprints on your mind.','sys'); } },
   enchant_w:{ name:'scroll of enchant weapon',g:'?',kind:'scroll', val:30, use:(p)=>{ if(S.p.weapon){S.p.weapon.ench=(S.p.weapon.ench||0)+1; msg('Your '+S.p.weapon.name+' glows sharper. (+'+S.p.weapon.ench+')','good');} else msg('You have no weapon to enchant.','dim'); } },
   enchant_a:{ name:'scroll of enchant armor', g:'?',kind:'scroll', val:30, use:(p)=>{ if(S.p.armor){S.p.armor.ench=(S.p.armor.ench||0)+1; recalc(); msg('Your '+S.p.armor.name+' hardens. (+'+S.p.armor.ench+')','good');} else msg('You wear no armor.','dim'); } },
+  identify: { name:'scroll of identify',     g:'?', kind:'scroll', val:16, use:(p)=>{ identifyOne(); } },
   light:    { name:'scroll of light',        g:'?', kind:'scroll', val:8,  use:(p)=>{ litRoom(); msg('Light blossoms around you.','sys'); } },
   fire:     { name:'scroll of flame',        g:'?', kind:'scroll', val:22, use:(p)=>{ scrollFlame(); } },
 };
 const FOODS = {
   ration:{ name:'food ration', g:'%', kind:'food', val:6, sat:700, use:(p)=>{ S.p.food=clamp(S.p.food+700,0,S.p.foodMax); msg('You eat the ration. Satisfying.','dim'); } },
   apple: { name:'apple',       g:'%', kind:'food', val:2, sat:250, use:(p)=>{ S.p.food=clamp(S.p.food+250,0,S.p.foodMax); msg('You munch an apple.','dim'); } },
-  corpse:{ name:'fresh corpse',g:'%', kind:'food', val:0, sat:200, use:(p)=>{ S.p.food=clamp(S.p.food+200,0,S.p.foodMax); if(chance(18)){S.p.poison=(S.p.poison||0)+4; msg('The corpse was tainted — you feel sick.','bad');} else msg('You eat the corpse. Grim, but filling.','dim'); } },
+  corpse:{ name:'fresh corpse',g:'%', kind:'food', val:0, sat:200, use:(p,it)=>{ p.food=clamp(p.food+200,0,p.foodMax);
+    const tpl=it&&it.from?MONSTERS.find(m=>m.id===it.from):null;
+    if(tpl&&tpl.eat && p.intrinsics && !p.intrinsics.includes(tpl.eat) && chance(50)){ p.intrinsics.push(tpl.eat); applyIntrinsic(tpl.eat); recalc(); msg('Strange power floods you — you gain '+intrinsicName(tpl.eat)+'!','good'); }
+    else if(tpl&&tpl.poison && chance(45)){ p.poison=(p.poison||0)+4; msg('The tainted flesh sickens you.','bad'); }
+    else msg('You eat the '+(tpl?tpl.name:'')+' corpse. Grim, but filling.','dim'); } },
 };
 const SPELLS = {
   magic_missile:{ name:'Magic Missile', cost:3,  desc:'Bolt of force at the nearest foe.', cast:()=>spellBolt('1d8',2,'force') },
@@ -329,10 +374,30 @@ const HISCORE_KEY='abyssal_hi_v1';
 /* --------------------------------- STATE --------------------------------- */
 let S=null;
 function newState(){ return { p:null, depth:0, map:null, seen:null, vis:null, mons:[], items:[], up:null, down:null,
-  turn:0, over:false, won:false, log:[], orb:false, mode:'play' }; }
+  turn:0, over:false, won:false, log:[], orb:false, mode:'play',
+  town:false, artiSeen:[], quests:null, appear:null, known:null }; }
 
 /* ------------------------------ MAP GENERATION --------------------------- */
 function blankMap(){ const m=[]; for(let y=0;y<MH;y++){ m.push(new Array(MW).fill('#')); } return m; }
+function initSeenVis(){ S.seen=[]; S.vis=[]; for(let y=0;y<MH;y++){ S.seen.push(new Array(MW).fill(false)); S.vis.push(new Array(MW).fill(false)); } }
+function buildTown(){
+  const L=genLevel(1); // depth arg 1 just to ensure a '>' staircase is carved
+  S.map=L.map; S.up=L.up; S.down=L.down; S.depth=0; S.town=true;
+  if(S.up) S.map[S.up.y][S.up.x]='.'; // the surface has no up-stair
+  initSeenVis(); S.mons=[]; S.items=[];
+  S.p.x=L.up.x; S.p.y=L.up.y;
+  const rooms=L.rooms.slice(); const downRoom=rooms[rooms.length-1];
+  const avail=rooms.filter(r=>r!==downRoom); shuffle(avail);
+  NPCS.forEach((npc,idx)=>{
+    const r=avail[idx%avail.length] || rooms[idx%rooms.length];
+    let x=r.cx, y=r.cy;
+    if((x===S.p.x&&y===S.p.y)||S.map[y][x]!=='.'||monAt(x,y)){ const c=findFreeNear(r); if(c){x=c.x;y=c.y;} }
+    if(S.map[y][x]==='.' && !monAt(x,y) && !(x===S.p.x&&y===S.p.y))
+      S.mons.push({npc:npc.id, g:npc.g, c:npc.c, name:npc.name, x, y, friendly:true, hp:9999, asleep:false});
+  });
+  computeFOV(); // town is fully lit (see computeFOV town branch)
+}
+function findFreeNear(r){ for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++){ if(S.map[y][x]==='.'&&!(x===S.p.x&&y===S.p.y)&&!monAt(x,y)) return {x,y}; } return null; }
 function genLevel(depth){
   const map=blankMap(); const rooms=[];
   const tries=rng(9,13);
@@ -366,9 +431,8 @@ function carveCorridor(map,a,b){
 
 function buildLevel(depth, cameFromBelow){
   const L=genLevel(depth);
-  S.map=L.map; S.up=L.up; S.down=L.down; S.depth=depth;
-  S.seen=[]; S.vis=[];
-  for(let y=0;y<MH;y++){ S.seen.push(new Array(MW).fill(false)); S.vis.push(new Array(MW).fill(false)); }
+  S.map=L.map; S.up=L.up; S.down=L.down; S.depth=depth; S.town=false;
+  initSeenVis();
   S.mons=[]; S.items=[];
   // place player
   const start = cameFromBelow ? L.down : L.up;
@@ -388,6 +452,8 @@ function buildLevel(depth, cameFromBelow){
   for(let i=0;i<ic;i++){ const cell=randFloor(true); if(!cell)break; dropItem(rollItem(depth),cell.x,cell.y); }
   // gold piles
   for(let i=0;i<rng(2,5);i++){ const cell=randFloor(true); if(!cell)break; S.items.push({x:cell.x,y:cell.y,gold:rng(3,12)+depth*2,g:'$'}); }
+  // a dark altar, now and then
+  if(depth>=2 && depth<WIN_DEPTH && chance(45)){ const rr=pick(L.rooms); const ax=rr.cx, ay=rr.cy; if(S.map[ay][ax]==='.'&&!(ax===S.p.x&&ay===S.p.y)) S.map[ay][ax]='_'; }
   // The Sanctum: boss + orb
   if(depth>=WIN_DEPTH){
     const r=L.rooms[L.rooms.length-1];
@@ -396,6 +462,8 @@ function buildLevel(depth, cameFromBelow){
     // orb near boss
     let oc=randFloor(true)||{x:r.x+1,y:r.y+1};
     S.items.push({x:oc.x,y:oc.y,orb:true,g:'*',name:'the Orb of the Ancients'});
+    const av=Object.keys(ARTIFACTS).filter(id=>!S.artiSeen.includes(id));
+    if(av.length){ const id=pick(av); S.artiSeen.push(id); const ac=randFloor(true); if(ac) dropItem(mkArtifact(id),ac.x,ac.y); }
     msg('The air is thick with ancient power. The guardian stirs...','warn');
   }
   computeFOV();
@@ -409,6 +477,11 @@ function randFloor(empty){
   } return null;
 }
 function rollItem(depth){
+  // rare artifacts in the deep
+  if(depth>=5 && chance(7)){
+    const avail=Object.keys(ARTIFACTS).filter(id=>!S.artiSeen.includes(id));
+    if(avail.length){ const id=pick(avail); S.artiSeen.push(id); return mkArtifact(id); }
+  }
   const r=rng(1,100);
   if(r<=30){ // potion
     const t=weightedPick([['healing',30],['mana',18],['greater',6],['strength',5],['agility',5],['life',4],['exp',6],['poison',10]]); return mkItem(t);
@@ -424,6 +497,7 @@ function rollItem(depth){
 }
 function weightedPick(pairs){ let tot=0; pairs.forEach(p=>tot+=p[1]); let r=rng(1,tot); for(const p of pairs){ r-=p[1]; if(r<=0)return p[0]; } return pairs[0][0]; }
 function mkItem(id){ const base=ITEM_DB[id]; return Object.assign({id}, base); }
+function mkCorpse(monId){ const tpl=MONSTERS.find(m=>m.id===monId); const c=Object.assign({},FOODS.corpse); c.id='corpse'; c.from=monId; c.name=(tpl?tpl.name:'')+' corpse'; c.qty=1; return c; }
 function dropItem(it,x,y){ S.items.push(Object.assign({x,y,g:it.g||'?'},{item:it})); }
 
 /* ------------------------------- ENTITIES -------------------------------- */
@@ -452,7 +526,9 @@ function createPlayer(raceId,clsId,name){
     // talents / powers / corruption
     powers:[], mutations:[], corruption:0, mutCount:0, pendingTalents:0,
     bonHP:0, bonMP:0, bonAcc:0, bonCrit:0, bonLight:0, bonRegen:0, bonRegenMP:0,
-    dodge:0, poisonRes:0, spellPow:0 };
+    dodge:0, poisonRes:0, spellPow:0,
+    // gods & intrinsics
+    piety:30, prayTimer:0, intrinsics:[], fireRes:0, god:pick(GODS) };
   S.p=p; recalc(); p.hp=p.maxhp; p.mp=p.maxmp;
   // starting gear
   const st=C.start;
@@ -521,12 +597,54 @@ function chooseTalent(id){
   S.p.pendingTalents--;
   if(S.p.pendingTalents>0) openTalents(); else { hideScreen(); render(); }
 }
+function removeMutation(){
+  const p=S.p; if(!p.mutations.length) return false;
+  // prefer to purge a curse
+  let id=p.mutations.find(x=>{const m=mutById(x);return m&&!m.good;}) || p.mutations[0];
+  const m=mutById(id); if(m&&m.unapply) m.unapply(p);
+  p.mutations=p.mutations.filter(x=>x!==id); recalc();
+  return m?m.name:true;
+}
+/* ---- gods: altars, sacrifice, prayer ---- */
+function altarMenu(){
+  S.mode='menu'; const p=S.p;
+  let body='<h1 style="font-size:20px">A DARK ALTAR</h1>';
+  body+='<div class="sub">sacred to '+p.god+' · your favor: '+Math.floor(p.piety)+'</div>';
+  body+=`<button class="opt" onclick="sacrifice(25)"><b>Sacrifice 25 gold</b><span class="d">You have ${p.gold} gold. Offerings earn favor.</span></button>`;
+  body+=`<button class="opt" onclick="sacrifice(-1)"><b>Sacrifice all gold</b><span class="d">Pour out everything you carry.</span></button>`;
+  body+=`<button class="opt" onclick="pray()"><b>Pray</b><span class="d">Beg your god for aid. Do not test their patience.</span></button>`;
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Step away</b></button>';
+  showScreen(body);
+}
+function sacrifice(amt){
+  const p=S.p; let g = amt<0 ? p.gold : Math.min(amt,p.gold);
+  if(g<=0){ msg('You have no gold to offer.','dim'); return altarMenu(); }
+  p.gold-=g; p.piety+=Math.ceil(g*0.6); msg('You offer '+g+' gold. '+p.god+' is pleased.','sys');
+  altarMenu();
+}
+function pray(){
+  const p=S.p; hideScreen();
+  if(p.prayTimer>0){
+    msg(p.god+' is angered by your constant pleading!','bad');
+    const d=rng(4,10); p.hp-=d; p.prayTimer+=40;
+    if(p.hp<=0){ return death(); }
+    return endTurn();
+  }
+  let cost=0, did=false;
+  if(p.hp < p.maxhp*0.5 && p.piety>=40){ heal(999); cost=40; did=true; msg(p.god+' mends your wounds.','good'); }
+  else if(p.poison>0 && p.piety>=25){ p.poison=0; cost=25; did=true; msg(p.god+' purges the venom from your blood.','good'); }
+  else if(p.mutCount>0 && p.corruption>0 && p.piety>=120){ const nm=removeMutation(); p.corruption=Math.max(0,p.corruption-CORR_PER_MUT); p.mutCount=Math.max(0,p.mutCount-1); cost=120; did=true; msg('Holy fire burns the Chaos away'+(nm&&nm!==true?' — '+nm+' fades':'')+'.','good'); }
+  else if(p.piety>=200){ const gift=pick(['greater','enchant_w','enchant_a','life']); addInv(mkItem(gift)); cost=200; did=true; msg(p.god+' grants you a boon — something appears in your pack.','good'); }
+  else { msg('You pray, but '+p.god+' is silent. Earn favor with offerings.','dim'); return endTurn(); }
+  if(did){ p.piety-=cost; p.prayTimer=rng(70,140); recalc(); }
+  endTurn();
+}
 
 function addInv(it){
-  // stack consumables by id
-  if(it.kind!=='weapon'&&it.kind!=='armor'){
-    const ex=S.p.inv.find(x=>x.id===it.id && x.kind===it.kind && !x.ench);
-    if(ex){ ex.qty=(ex.qty||1)+1; return; }
+  // stack consumables by id (but never artifacts or corpses — they carry unique data)
+  if(it.kind!=='weapon'&&it.kind!=='armor'&&it.id!=='corpse'&&!it.artifact){
+    const ex=S.p.inv.find(x=>x.id===it.id && x.kind===it.kind && !x.ench && !x.artifact);
+    if(ex){ ex.qty=(ex.qty||1)+(it.qty||1); return; }
   }
   it.qty=it.qty||1; S.p.inv.push(it);
 }
@@ -535,6 +653,10 @@ function addInv(it){
 function blocks(x,y){ const t=S.map[y]&&S.map[y][x]; return t==='#'||t==='+'; }
 function computeFOV(){
   for(let y=0;y<MH;y++) S.vis[y].fill(false);
+  if(S.town){ // the village is safe and fully lit
+    for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){ if(S.map[y][x]!=='#'||hasFloorNeighbor(x,y)){ S.vis[y][x]=true; S.seen[y][x]=true; } }
+    return;
+  }
   const px=S.p.x,py=S.p.y,R=S.p.light;
   S.vis[py][px]=true; S.seen[py][px]=true;
   for(let y=py-R;y<=py+R;y++){ for(let x=px-R;x<=px+R;x++){
@@ -571,7 +693,7 @@ function playerMove(dx,dy){
   const nx=S.p.x+dx, ny=S.p.y+dy;
   if(nx<0||ny<0||nx>=MW||ny>=MH) return;
   const m=monAt(nx,ny);
-  if(m){ return playerAttack(m); }
+  if(m){ if(m.friendly) return talkNPC(m); return playerAttack(m); }
   const t=S.map[ny][nx];
   if(t==='#'){ return; }
   S.p.x=nx; S.p.y=ny;
@@ -587,6 +709,7 @@ function centerAction(){
   if(it && it.item){ pickupHere(it); return; }
   if(it && it.orb){ grabOrb(it); return; }
   const t=S.map[S.p.y][S.p.x];
+  if(t==='_'){ return altarMenu(); }
   if(t==='>'||t==='<'){ return useStairs(); }
   // search/wait
   msg('You wait.','dim'); endTurn();
@@ -609,6 +732,7 @@ function playerAttack(m){
   m.hp-=dmg;
   msg((crit?(unaware&&hasPower('backstab')?'BACKSTAB! ':'CRITICAL! '):'')+'You hit the '+m.name+' for '+dmg+'.', crit?'good':'');
   if(hasMut('venom') && m.hp>0){ m.venom=(m.venom||0)+3; }
+  if(S.p.weapon && S.p.weapon.lifesteal && S.p.hp<S.p.maxhp){ const h=Math.max(1,Math.floor(dmg*0.25)); heal(h); }
   if(m.hp<=0){ killMonster(m); }
   else if(hasPower('cleave') && chance(35)){ // carry into a second adjacent foe
     const o=S.mons.find(z=>z!==m && z.hp>0 && Math.abs(z.x-S.p.x)<=1 && Math.abs(z.y-S.p.y)<=1);
@@ -619,7 +743,8 @@ function playerAttack(m){
 function killMonster(m){
   msg('The '+m.name+' dies.', 'good');
   S.mons=S.mons.filter(z=>z!==m);
-  if(chance(22)) dropItem(mkItem('corpse'),m.x,m.y);
+  if(S.quests && S.quests.rats && m.id==='rat' && !S.quests.rats.turned) S.quests.rats.count++;
+  if(chance(28)) dropItem(mkCorpse(m.id),m.x,m.y);
   if(m.boss){ msg('The ANCIENT WYRM collapses with a world-shaking roar!','warn'); }
   if(hasPower('second_wind')){ const h=Math.floor(S.p.maxhp*0.25); if(S.p.hp<S.p.maxhp){ heal(h); msg('Second Wind surges through you. +'+h+' HP','good'); } }
   if(hasPower('shadowstep') && chance(25)){ teleport(); msg('You melt into the shadows.','sys'); }
@@ -638,19 +763,96 @@ function gainXP(n){
   }
 }
 
+/* ------------------------------- TOWN / NPCs ----------------------------- */
+let _svc=[];
+function svc(label,cost,disabled,fn){ _svc.push(fn); const i=_svc.length-1;
+  return `<button class="opt" ${disabled?'disabled style="opacity:.4"':''} onclick="${disabled?'':'svcDo('+i+')'}"><b>${label}</b> <span class="tag">${cost}</span></button>`; }
+function svcDo(i){ const f=_svc[i]; if(f) f(); }
+function talkNPC(m){
+  S.mode='menu';
+  switch(m.npc){ case 'elder':return elderScreen(); case 'healer':return healerScreen();
+    case 'shop':return merchantScreen(); case 'sage':return sageScreen(); case 'inn':return innScreen();
+    default: hideScreen(); render(); }
+}
+function elderScreen(){
+  S.mode='menu'; _svc=[]; const q=S.quests;
+  let body='<h1 style="font-size:20px">ELDER MARO</h1>';
+  body+='<p style="font-size:13px;color:var(--ink);line-height:1.5">"Hollowreach is dying. The <b>Orb of the Ancients</b> was dragged down into the Abyss, and without it the wards fail and Chaos rots us all. Descend the ten levels, reclaim the Orb, and you\'ll be a legend here."</p>';
+  body+='<div class="statline"><span>Main quest</span><b>'+(S.won?'COMPLETE ✓':'Reclaim the Orb (DLvl '+WIN_DEPTH+')')+'</b></div>';
+  if(!q.rats.turned){
+    if(q.rats.count>=q.rats.need) body+=svc('✓ Turn in — Vermin Cull','+60g & XP',false,()=>{ q.rats.turned=true; S.p.gold+=60; gainXP(40); msg('Elder Maro presses 60 gold into your hand.','good'); elderScreen(); });
+    else body+='<div class="statline"><span>Task — Vermin Cull</span><b>'+q.rats.count+'/'+q.rats.need+' giant rats</b></div>';
+  } else body+='<div class="statline"><span>Vermin Cull</span><b>done ✓</b></div>';
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Farewell</b></button>';
+  showScreen(body);
+}
+function healerScreen(){
+  S.mode='menu'; _svc=[]; const p=S.p;
+  const healCost=Math.max(1,p.maxhp-p.hp);
+  let body='<h1 style="font-size:20px">THE HEALER</h1><div class="sub">your gold: '+p.gold+'</div>';
+  body+=svc('Heal all wounds', healCost+'g', p.hp>=p.maxhp||p.gold<healCost, ()=>{ p.gold-=healCost; heal(999); msg('The Healer\'s hands close your wounds.','good'); healerScreen(); });
+  body+=svc('Cure poison', '15g', !p.poison||p.gold<15, ()=>{ p.gold-=15; p.poison=0; msg('The poison is drawn from your veins.','good'); healerScreen(); });
+  body+=svc('Cleanse a mutation', '150g', !p.mutations.length||p.gold<150, ()=>{ p.gold-=150; const nm=removeMutation(); p.corruption=Math.max(0,p.corruption-CORR_PER_MUT*0.5); msg('The Healer purges the Chaos'+(nm&&nm!==true?' — '+nm+' fades':'')+'.','good'); healerScreen(); });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Leave</b></button>';
+  showScreen(body);
+}
+function merchantScreen(){
+  S.mode='menu'; _svc=[]; const p=S.p;
+  let body='<h1 style="font-size:20px">THE MERCHANT</h1><div class="sub">your gold: '+p.gold+'</div><h2>Buy</h2>';
+  SHOP_STOCK.forEach(id=>{ const base=ITEM_DB[id]; if(!base)return; const price=Math.max(1,Math.round((base.val||5)*1.4));
+    body+=svc(base.name, price+'g', p.gold<price, ()=>{ p.gold-=price; const it=mkItem(id); addInv(it); setKnown(id,false); msg('You buy '+base.name+'.','good'); merchantScreen(); }); });
+  body+='<h2>Sell</h2>';
+  if(!p.inv.length) body+='<p style="color:var(--dim)">Nothing to sell.</p>';
+  p.inv.forEach((it)=>{ const v=Math.max(1,Math.floor((it.val||2)/2)); body+=svc('Sell '+itemName(it), '+'+v+'g', false, ()=>{ p.gold+=v; it.qty=(it.qty||1)-1; if(it.qty<=0){const ix=p.inv.indexOf(it);if(ix>=0)p.inv.splice(ix,1);} msg('Sold for '+v+' gold.','sys'); merchantScreen(); }); });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Leave</b></button>';
+  showScreen(body);
+}
+function sageScreen(){
+  S.mode='menu'; _svc=[]; const p=S.p; const q=S.quests.arti;
+  const unided=p.inv.filter(x=>(x.kind==='potion'||x.kind==='scroll')&&!isKnown(x));
+  let body='<h1 style="font-size:20px">THE SAGE</h1><div class="sub">your gold: '+p.gold+'</div>';
+  body+='<p style="font-size:12px;color:var(--dim)">"Knowledge has a price, friend."</p>';
+  body+=svc('Identify everything in your pack', '40g', !unided.length||p.gold<40, ()=>{ p.gold-=40; p.inv.forEach(x=>{ if(x.kind==='potion'||x.kind==='scroll') setKnown(x.id,false); }); msg('The Sage names every item you carry.','sys'); sageScreen(); });
+  const hasArti=p.inv.some(x=>x.artifact)||(p.weapon&&p.weapon.artifact)||(p.armor&&p.armor.artifact);
+  if(!q.turned){ if(hasArti) body+=svc('Show the Sage an artifact','+120g & XP',false,()=>{ q.turned=true; p.gold+=120; gainXP(80); msg('The Sage studies your artifact in awe. +120 gold','good'); sageScreen(); });
+    else body+='<div class="statline"><span>Sage\'s request</span><b>bring an artifact</b></div>'; }
+  else body+='<div class="statline"><span>Sage\'s request</span><b>done ✓</b></div>';
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Leave</b></button>';
+  showScreen(body);
+}
+function innScreen(){
+  S.mode='menu'; _svc=[]; const p=S.p;
+  let body='<h1 style="font-size:20px">THE INNKEEPER</h1>';
+  body+='<p style="font-size:13px;color:var(--ink)">"Beds are warm, the door is barred. Rest easy, delver."</p>';
+  body+=svc('Rest the night — heal & feed', 'free', p.hp>=p.maxhp&&p.mp>=p.maxmp&&p.food>=p.foodMax, ()=>{ p.hp=p.maxhp; p.mp=p.maxmp; p.food=p.foodMax; msg('You sleep soundly and wake fully restored.','good'); innScreen(); });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Leave</b></button>';
+  showScreen(body);
+}
+function introStory(){
+  S.mode='menu';
+  showScreen(`<div class="center"><h1>HOLLOWREACH</h1><div class="sub">the last village above the Abyss</div></div>
+   <p style="font-size:13.5px;line-height:1.55;color:var(--ink)">You reach <b>Hollowreach</b> as its wards gutter like dying candles. Elder Maro meets you at the gate: the <b>Orb of the Ancients</b> has been dragged down into the Abyss below, and without it Chaos will swallow the village whole.</p>
+   <p style="font-size:13.5px;line-height:1.55;color:var(--dim)">Trade with the villagers, take on their tasks, then find the stairs <b>(&gt;)</b> and descend into the dark. Ten levels down waits the Orb — and the <b>Ancient Wyrm</b> that guards it.</p>
+   <button class="opt" style="border-color:var(--gold);background:#23210f" onclick="hideScreen();render()"><b>▸ Enter Hollowreach</b></button>`);
+}
+
 /* --------------------------------- STAIRS -------------------------------- */
 function useStairs(){
   const t=S.map[S.p.y][S.p.x];
-  if(t==='>'){ buildLevel(S.depth+1,false); msg('You descend to dungeon level '+S.depth+'.','sys'); render(); }
-  else if(t==='<'){ if(S.depth<=1){ msg('You stand at the dungeon mouth. Only the depths await — there is no turning back without the Orb.','dim'); }
-    else { buildLevel(S.depth-1,true); msg('You climb to dungeon level '+S.depth+'.','sys'); render(); } }
-  else { msg('There are no stairs here.','dim'); }
+  if(t==='>'){
+    if(S.town){ buildLevel(1,false); msg('You descend into the Abyss. Level 1.','sys'); }
+    else { buildLevel(S.depth+1,false); msg('You descend to dungeon level '+S.depth+'.','sys'); }
+    render();
+  } else if(t==='<'){
+    if(S.depth<=1){ buildTown(); msg('You climb back into the daylight of Hollowreach.','sys'); render(); }
+    else { buildLevel(S.depth-1,true); msg('You climb to dungeon level '+S.depth+'.','sys'); render(); }
+  } else { msg('There are no stairs here.','dim'); }
 }
 
 /* --------------------------------- MAGIC --------------------------------- */
 function nearestVisibleMonster(){
   let best=null,bd=1e9;
-  for(const m of S.mons){ if(!S.vis[m.y][m.x]) continue; const d=Math.abs(m.x-S.p.x)+Math.abs(m.y-S.p.y); if(d<bd){bd=d;best=m;} }
+  for(const m of S.mons){ if(m.friendly||!S.vis[m.y][m.x]) continue; const d=Math.abs(m.x-S.p.x)+Math.abs(m.y-S.p.y); if(d<bd){bd=d;best=m;} }
   return best;
 }
 function spellBolt(dmgspec,critB,kind){
@@ -663,9 +865,9 @@ function spellBolt(dmgspec,critB,kind){
 function spellFireball(dmgspec){
   const m=nearestVisibleMonster(); if(!m){ msg('No target in sight.','dim'); return false; }
   const cx=m.x,cy=m.y; let hit=0;
-  for(const z of S.mons.slice()){ if(Math.abs(z.x-cx)<=1&&Math.abs(z.y-cy)<=1){ let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2)+(S.p.spellPow||0); z.asleep=false; z.hp-=dmg; hit++; if(z.hp<=0)killMonster(z);} }
+  for(const z of S.mons.slice()){ if(!z.friendly && Math.abs(z.x-cx)<=1&&Math.abs(z.y-cy)<=1){ let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2)+(S.p.spellPow||0); z.asleep=false; z.hp-=dmg; hit++; if(z.hp<=0)killMonster(z);} }
   // self damage if adjacent
-  if(Math.abs(S.p.x-cx)<=1&&Math.abs(S.p.y-cy)<=1){ const d=roll('1d6'); S.p.hp-=d; msg('The blast singes you for '+d+'!','bad'); }
+  if(Math.abs(S.p.x-cx)<=1&&Math.abs(S.p.y-cy)<=1){ let d=roll('1d6'); if(hasFireRes())d=Math.ceil(d/2); S.p.hp-=d; msg('The blast singes you for '+d+'!','bad'); }
   msg('Fireball erupts! '+hit+' foe'+(hit===1?'':'s')+' caught in the flames.','sys');
   return true;
 }
@@ -705,6 +907,8 @@ function upkeep(){
   const foodMul = (hasMut('hunger')?1.6:1) * (p.level>8?1.3:1);
   p.food-=Math.max(1,Math.round(R.food*foodMul));
   if(p.food<=0){ p.food=0; p.hp-=1; if(S.turn%3===0)msg('You are starving!','bad'); }
+  // prayer cooldown
+  if(p.prayTimer>0) p.prayTimer--;
   // poison
   if(p.poison>0){ p.poison--; p.hp-=1; if(S.turn%2===0)msg('The poison burns. (-1 HP)','bad'); }
   // regen (Toughness + Trollblood/Fast-Healer talents & race)
@@ -716,7 +920,7 @@ function upkeep(){
 }
 function monstersAct(){
   for(const m of S.mons.slice()){
-    if(m.hp<=0) continue;
+    if(m.hp<=0||m.friendly) continue;
     if(m.venom>0){ m.venom--; m.hp-=2; if(m.hp<=0){ killMonster(m); continue; } }
     if(m.spd==='slow'){ m.slowtick=!m.slowtick; if(m.slowtick) continue; }
     monsterStep(m);
@@ -771,8 +975,8 @@ function monsterAttack(m){
   if(p.hp<=0){ death(); }
 }
 function monsterBreath(m){
-  const p=S.p; let dmg=roll(m.breath); p.hp-=dmg;
-  msg('The '+m.name+' breathes fire — '+dmg+' damage!','bad');
+  const p=S.p; let dmg=roll(m.breath); if(hasFireRes())dmg=Math.ceil(dmg/2); p.hp-=dmg;
+  msg('The '+m.name+' breathes fire — '+dmg+' damage!'+(hasFireRes()?' (resisted)':''),'bad');
   if(p.hp<=0) death();
 }
 
@@ -798,7 +1002,20 @@ function msg(text,cls){ S.log.push({text,cls:cls||''}); if(S.log.length>40)S.log
 
 /* ============================== RENDERING ================================= */
 const $=(id)=>document.getElementById(id);
-function itemName(it){ let n=it.name; if(it.ench)n='+'+it.ench+' '+n; if(it.qty>1)n=it.qty+'× '+n; return n; }
+function itemName(it){
+  let n=it.name;
+  if((it.kind==='potion'||it.kind==='scroll') && !isKnown(it)){
+    n = it.kind==='potion' ? (((S.appear&&S.appear.potions[it.id])||'strange')+' potion')
+                           : ('scroll labeled '+((S.appear&&S.appear.scrolls[it.id])||'????'));
+  } else if(it.ench && !it.artifact){ n='+'+it.ench+' '+n; }
+  if(it.qty>1)n=it.qty+'× '+n;
+  return n;
+}
+function identifyOne(){
+  const it=S.p.inv.find(x=>(x.kind==='potion'||x.kind==='scroll')&&!isKnown(x));
+  if(!it){ msg('Nothing in your pack needs identifying.','dim'); return; }
+  setKnown(it.id,false); msg('You identify it: '+itemName(it)+'.','sys');
+}
 
 function sizeMap(){
   const wrap=$('mapwrap'); const w=wrap.clientWidth, h=wrap.clientHeight;
@@ -819,14 +1036,14 @@ function render(){
   renderLog();
   // center button label
   const here=itemAt(S.p.x,S.p.y); const t=S.map[S.p.y][S.p.x];
-  $('centerLbl').textContent = here&&here.gold?'·' : here?'grab' : (t==='>'?'down':t==='<'?'up':'wait');
+  $('centerLbl').textContent = here&&here.item?'grab' : here&&here.orb?'grab' : (t==='_'?'pray':t==='>'?'down':t==='<'?'up':'wait');
   $('stairBtn').disabled = !(t==='>'||t==='<');
   $('castBtn').disabled = !(classOf().caster || S.p.spells.length);
 }
 function renderHUD(){
   const p=S.p;
   $('hName').textContent=p.name+' the '+raceOf().name+' '+classOf().name;
-  $('hDepth').textContent=S.depth; $('hClvl').textContent=p.level; $('hGold').textContent=p.gold;
+  $('hDepth').textContent=S.town?'Town':S.depth; $('hClvl').textContent=p.level; $('hGold').textContent=p.gold;
   const corr=Math.floor(p.corruption||0);
   const cp=$('hCorrPill'); cp.style.display=corr>0?'':'none';
   if(corr>0){ $('hCorr').textContent=corr; const toNext=CORR_PER_MUT-(corr%CORR_PER_MUT); cp.title='mutation in ~'+toNext; cp.style.color=(corr%CORR_PER_MUT)>=70?'var(--red)':''; }
@@ -936,10 +1153,12 @@ function statTag(mod){ const parts=[]; for(const k in mod){ if(mod[k]) parts.pus
 function beginGame(){
   S=newState(); S.mode='play';
   createPlayer(_cre.race,_cre.cls);
-  buildLevel(1,false);
-  S.log=[]; msg('You enter the Abyssal Domains. Level 1.','sys');
-  msg('Find the Orb in the deep. Stay alive.','warn');
-  hideScreen(); sizeMap(); render();
+  assignAppearances();
+  S.quests={ rats:{count:0,need:8,turned:false}, arti:{turned:false} };
+  buildTown();
+  S.log=[]; msg('You arrive at Hollowreach, the last village above the Abyss.','sys');
+  sizeMap(); render();
+  introStory();
 }
 
 /* ---- inventory ---- */
@@ -988,9 +1207,11 @@ function equipItem(i){
 }
 function useItem(i){
   const it=S.p.inv[i]; if(!it) return invScreen();
+  const wasUnknown=(it.kind==='potion'||it.kind==='scroll')&&!isKnown(it);
   hideScreen();
-  if(it.use) it.use(S.p);
-  it.qty=(it.qty||1)-1; if(it.qty<=0) S.p.inv.splice(S.p.inv.indexOf(it),1);
+  if(it.use) it.use(S.p, it);
+  if(wasUnknown) setKnown(it.id,true);
+  it.qty=(it.qty||1)-1; if(it.qty<=0){ const idx=S.p.inv.indexOf(it); if(idx>=0) S.p.inv.splice(idx,1); }
   recalc(); endTurn();
 }
 function dropItem2(i){
@@ -1041,6 +1262,9 @@ function openChar(){
       <div class="statline"><span>Gold</span><b>${p.gold}</b></div>
     </div>
     <div class="statline"><span>Dodge</span><b>${p.dodge||0}%</b></div>
+    <div class="statline"><span>Deity</span><b>${p.god}</b></div>
+    <div class="statline"><span>Divine favor</span><b>${Math.floor(p.piety||0)}</b></div>
+    ${p.intrinsics&&p.intrinsics.length?`<div class="statline"><span>Intrinsics</span><b>${p.intrinsics.map(intrinsicName).join(', ')}</b></div>`:''}
     <div class="statline"><span>Wielding</span><b>${p.weapon?itemName(p.weapon):'bare hands'}</b></div>
     <div class="statline"><span>Wearing</span><b>${p.armor?itemName(p.armor):'nothing'}</b></div>
     ${p.spells.length?`<div class="statline"><span>Spells</span><b>${p.spells.map(s=>SPELLS[s].name).join(', ')}</b></div>`:''}
