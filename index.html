@@ -113,11 +113,12 @@
       <button class="btn" data-cmd="dr">↘</button>
     </div>
     <div id="actcol">
-      <button class="btn" data-cmd="inv">Items<small>i</small></button>
+      <button class="btn" data-cmd="fire" id="shootBtn">Shoot<small id="shootLbl">f</small></button>
       <button class="btn" data-cmd="cast" id="castBtn">Cast<small>z</small></button>
+      <button class="btn" data-cmd="inv">Items<small>i</small></button>
       <button class="btn" data-cmd="rest">Rest<small>R</small></button>
       <button class="btn" data-cmd="stairs" id="stairBtn">Stairs<small>&gt;</small></button>
-      <button class="btn wide" data-cmd="char">Character<small>tap for stats &amp; help</small></button>
+      <button class="btn" data-cmd="char">Hero<small>@</small></button>
     </div>
   </div>
 </div>
@@ -170,9 +171,9 @@ const CLASSES = [
     start:{ weapon:'dagger', armor:'robe', items:['mana','mana','ration','teleport'] },
     mod:{str:-1,dex:1,tou:-1,wil:3,per:1} },
   { id:'ranger', name:'Ranger', hpL:6, mpL:3, atk:1, crit:12, caster:true,
-    desc:'Balanced survivor. Sharp eyes, a little magic, lethal crits.',
-    spells:['magic_missile','light'],
-    start:{ weapon:'shortsword', armor:'leather', items:['healing','ration','ration'] },
+    desc:'Bow-hunter and survivor. Shoots from afar, sharp eyes, lethal crits.',
+    spells:['light'],
+    start:{ weapon:'shortsword', armor:'leather', ranged:'shortbow', arrows:25, items:['healing','ration','ration'] },
     mod:{str:1,dex:2,tou:1,wil:1,per:2} },
   { id:'thief', name:'Thief', hpL:5, mpL:2, atk:1, crit:20, caster:false,
     desc:'Strikes from the shadows. Huge crits, finds gold, wakes foes late.',
@@ -276,12 +277,12 @@ const NPCS=[
   { id:'sage',  g:'G', c:'#9bf', name:'the Sage' },
   { id:'inn',   g:'I', c:'#fb9', name:'the Innkeeper' },
 ];
-const SHOP_STOCK=['healing','greater','mana','ration','ration','teleport','mapping','identify','enchant_w','enchant_a','shortsword','longsword','mace','leather','chainmail'];
+const SHOP_STOCK=['healing','greater','mana','ration','ration','teleport','mapping','identify','enchant_w','enchant_a','shortsword','longsword','mace','leather','chainmail','shortbow','longbow','arrow'];
 
 // glyph colors
 const COL={ '#':'var(--wall)','.':'var(--floor)','+':'var(--gold)','>':'var(--cyan)','<':'var(--cyan)',
   '@':'var(--white)','$':'var(--gold)','!':'var(--red)','?':'var(--white)','/':'var(--cyan)','[':'var(--blue)',
-  '%':'var(--food)','*':'var(--mag)','=':'var(--gold)','_':'var(--mag)' };
+  '%':'var(--food)','*':'var(--mag)','=':'var(--gold)','_':'var(--mag)','}':'var(--cyan)' };
 
 // Monsters. d = first depth it appears. spd: 'fast' acts twice, 'slow' every other.
 const MONSTERS = [
@@ -360,8 +361,15 @@ const SPELLS = {
   teleport:     { name:'Blink',         cost:8,  desc:'Teleport to a random location.', cast:()=>{ teleport(); msg('You blink across the dungeon.','sys'); return true; } },
 };
 
+const BOWS = {
+  shortbow:{ name:'short bow', g:'}', dmg:'1d6',  acc:2, range:6, val:18 },
+  longbow: { name:'long bow',  g:'}', dmg:'1d8',  acc:3, range:8, val:34 },
+  crossbow:{ name:'crossbow',  g:'}', dmg:'1d10', acc:1, range:7, val:48 },
+};
+const AMMO = { arrow:{ name:'arrows', g:'/', val:1 } };
+
 const ITEM_DB = Object.assign({},
-  mapObj(WEAPONS,'weapon'), mapObj(ARMORS,'armor'),
+  mapObj(WEAPONS,'weapon'), mapObj(ARMORS,'armor'), mapObj(BOWS,'bow'), mapObj(AMMO,'ammo'),
   POTIONS, SCROLLS, FOODS );
 function mapObj(src,kind){ const o={}; for(const k in src){ o[k]=Object.assign({kind},src[k]); } return o; }
 
@@ -482,6 +490,7 @@ function rollItem(depth){
     const avail=Object.keys(ARTIFACTS).filter(id=>!S.artiSeen.includes(id));
     if(avail.length){ const id=pick(avail); S.artiSeen.push(id); return mkArtifact(id); }
   }
+  if(chance(8)){ const a=mkItem('arrow'); a.qty=rng(8,16); return a; } // a quiver of arrows
   const r=rng(1,100);
   if(r<=30){ // potion
     const t=weightedPick([['healing',30],['mana',18],['greater',6],['strength',5],['agility',5],['life',4],['exp',6],['poison',10]]); return mkItem(t);
@@ -489,7 +498,8 @@ function rollItem(depth){
     const t=weightedPick([['teleport',18],['mapping',16],['enchant_w',12],['enchant_a',12],['light',14],['fire',10]]); return mkItem(t);
   } else if(r<=66){ // food
     return mkItem(weightedPick([['ration',60],['apple',40]]));
-  } else if(r<=84){ // weapon
+  } else if(r<=84){ // weapon (sometimes a bow)
+    if(chance(28)){ const bk=Object.keys(BOWS); return mkItem(bk[clamp(Math.floor(depth/3),0,bk.length-1)]); }
     const keys=Object.keys(WEAPONS); const idx=clamp(Math.floor(depth/2)+rng(0,2),0,keys.length-1); return mkItem(keys[idx]);
   } else { // armor
     const keys=Object.keys(ARMORS); const idx=clamp(Math.floor(depth/2.2)+rng(0,1),0,keys.length-1); return mkItem(keys[idx]);
@@ -520,7 +530,7 @@ function createPlayer(raceId,clsId,name){
   for(const k in attr){ attr[k]+=(R.mod[k]||0)+(C.mod[k]||0); }
   const p={ name:name||C.name, race:raceId, cls:clsId, attr,
     level:1, xp:0, xpNext:20, gold:0,
-    x:0,y:0, weapon:null, armor:null, inv:[], spells:(C.spells||[]).slice(),
+    x:0,y:0, weapon:null, armor:null, ranged:null, inv:[], spells:(C.spells||[]).slice(),
     food:1400, foodMax:1600, poison:0, regenTick:0, mpTick:0,
     crit:C.crit, find:(C.find||0)+(R.find||0),
     // talents / powers / corruption
@@ -534,6 +544,8 @@ function createPlayer(raceId,clsId,name){
   const st=C.start;
   if(st.weapon){ p.weapon=mkItem(st.weapon); }
   if(st.armor){ p.armor=mkItem(st.armor); }
+  if(st.ranged){ p.ranged=mkItem(st.ranged); }
+  if(st.arrows){ addArrows(st.arrows); }
   (st.items||[]).forEach(id=>addInv(mkItem(id)));
   // level-1 class powers
   (POWERS[clsId]||[]).forEach(pw=>{ if(pw.lvl<=1) applyPower(pw.id,true); });
@@ -684,6 +696,7 @@ function act(cmd){
     case 'center': return centerAction();
     case 'rest':   return restCmd();
     case 'stairs': return useStairs();
+    case 'fire':   return fire();
     case 'inv':    return openInventory();
     case 'cast':   return openCast();
     case 'char':   return openChar();
@@ -799,7 +812,9 @@ function healerScreen(){
 function merchantScreen(){
   S.mode='menu'; _svc=[]; const p=S.p;
   let body='<h1 style="font-size:20px">THE MERCHANT</h1><div class="sub">your gold: '+p.gold+'</div><h2>Buy</h2>';
-  SHOP_STOCK.forEach(id=>{ const base=ITEM_DB[id]; if(!base)return; const price=Math.max(1,Math.round((base.val||5)*1.4));
+  SHOP_STOCK.forEach(id=>{ const base=ITEM_DB[id]; if(!base)return;
+    if(id==='arrow'){ const price=18; body+=svc('arrows ×15','18g',p.gold<price,()=>{ p.gold-=price; addArrows(15); msg('You buy a bundle of arrows.','good'); merchantScreen(); }); return; }
+    const price=Math.max(1,Math.round((base.val||5)*1.4));
     body+=svc(base.name, price+'g', p.gold<price, ()=>{ p.gold-=price; const it=mkItem(id); addInv(it); setKnown(id,false); msg('You buy '+base.name+'.','good'); merchantScreen(); }); });
   body+='<h2>Sell</h2>';
   if(!p.inv.length) body+='<p style="color:var(--dim)">Nothing to sell.</p>';
@@ -850,6 +865,32 @@ function useStairs(){
 }
 
 /* --------------------------------- MAGIC --------------------------------- */
+/* --------------------------------- RANGED -------------------------------- */
+function addArrows(n){ const a=mkItem('arrow'); a.qty=n; addInv(a); }
+function arrowCount(){ const a=S.p.inv.find(x=>x.id==='arrow'); return a?(a.qty||0):0; }
+function useArrow(){ const a=S.p.inv.find(x=>x.id==='arrow'); if(!a||a.qty<=0) return false; a.qty--; if(a.qty<=0){ const i=S.p.inv.indexOf(a); if(i>=0)S.p.inv.splice(i,1); } return true; }
+function fire(){
+  if(!S||S.over||S.mode!=='play') return;
+  const p=S.p, bow=p.ranged;
+  if(!bow){ msg('You have no bow readied. Find one and ready it from your pack.','dim'); return; }
+  if(arrowCount()<=0){ msg('You are out of arrows!','bad'); return; }
+  let best=null,bd=1e9;
+  for(const m of S.mons){ if(m.friendly||!S.vis[m.y][m.x]) continue;
+    const d=Math.max(Math.abs(m.x-p.x),Math.abs(m.y-p.y));
+    if(d<=bow.range && d<bd){ bd=d; best=m; } }
+  if(!best){ msg('No target within bowshot.','dim'); return; }
+  useArrow(); best.asleep=false;
+  const racc=p.attr.dex+(bow.acc||0)+(bow.ench||0)+Math.floor(p.level/2)+(p.bonAcc||0)+(hasPower('keen_eye')?1:0);
+  const hitC=clamp(55+(racc-best.def)*6,5,95);
+  if(!chance(hitC)){ msg('Your arrow whistles past the '+best.name+'.','dim'); return endTurn(); }
+  let dmg=roll(bow.dmg)+(bow.ench||0)+Math.floor((p.attr.dex-10)/2); let crit=false;
+  if(chance(p.crit)){ dmg=Math.floor(dmg*1.8); crit=true; }
+  best.hp-=dmg;
+  msg((crit?'CRITICAL SHOT! ':'')+'Your arrow strikes the '+best.name+' for '+dmg+'.', crit?'good':'');
+  if(best.hp<=0) killMonster(best);
+  endTurn();
+}
+
 function nearestVisibleMonster(){
   let best=null,bd=1e9;
   for(const m of S.mons){ if(m.friendly||!S.vis[m.y][m.x]) continue; const d=Math.abs(m.x-S.p.x)+Math.abs(m.y-S.p.y); if(d<bd){bd=d;best=m;} }
@@ -1039,6 +1080,9 @@ function render(){
   $('centerLbl').textContent = here&&here.item?'grab' : here&&here.orb?'grab' : (t==='_'?'pray':t==='>'?'down':t==='<'?'up':'wait');
   $('stairBtn').disabled = !(t==='>'||t==='<');
   $('castBtn').disabled = !(classOf().caster || S.p.spells.length);
+  const ar=arrowCount();
+  $('shootBtn').disabled = !S.p.ranged || ar<=0;
+  $('shootLbl').textContent = S.p.ranged ? ('⤙'+ar) : 'f';
 }
 function renderHUD(){
   const p=S.p;
@@ -1117,7 +1161,8 @@ function howto(){
     <h2>HOW TO PLAY</h2>
     <p style="font-size:13px;color:var(--ink);line-height:1.5">
       Move with the <b>3×3 pad</b> (corners = diagonals). The <b>centre</b> button waits, grabs an item, or takes stairs. <b>Bump a monster</b> to attack it.<br><br>
-      On a keyboard: <b>arrows / WASD / hjkl+yubn</b> to move, <b>g</b> grab, <b>i</b> items, <b>z</b> cast, <b>R</b> rest, <b>&gt;</b>/<b>&lt;</b> stairs.
+      The <b>Shoot</b> button (key <b>f</b>) looses an arrow at the nearest foe in sight — ready a <b>bow</b> and carry <b>arrows</b>. The Ranger starts with both; anyone can use a bow they find or buy.<br><br>
+      On a keyboard: <b>arrows / WASD / hjkl+yubn</b> to move, <b>g</b> grab, <b>f</b> shoot, <b>i</b> items, <b>z</b> cast, <b>R</b> rest, <b>&gt;</b>/<b>&lt;</b> stairs.
     </p>
     <h2>SYMBOLS</h2>
     <div class="glyphkey">
@@ -1166,7 +1211,7 @@ function openInventory(){ S.mode='menu'; invScreen(); }
 function invScreen(){
   const p=S.p; const groups={};
   p.inv.forEach((it,i)=>{ (groups[it.kind]=groups[it.kind]||[]).push({it,i}); });
-  const order=['potion','scroll','food','weapon','armor'];
+  const order=['potion','scroll','food','weapon','bow','ammo','armor'];
   let body='<h1 style="font-size:20px">INVENTORY</h1>';
   body+=`<div class="grid2" style="margin-bottom:8px">
     <div class="statline"><span>Weapon</span><b>${p.weapon?itemName(p.weapon):'— bare hands —'}</b></div>
@@ -1184,6 +1229,8 @@ function itemMenu(i){
   body+='<p style="color:var(--dim);font-size:12px">'+itemDesc(it)+'</p>';
   if(it.kind==='weapon') body+=`<button class="opt" onclick="equipItem(${i})"><b>⚔ Wield</b></button>`;
   else if(it.kind==='armor') body+=`<button class="opt" onclick="equipItem(${i})"><b>🛡 Wear</b></button>`;
+  else if(it.kind==='bow') body+=`<button class="opt" onclick="equipItem(${i})"><b>🏹 Ready bow</b></button>`;
+  else if(it.kind==='ammo') {}
   else body+=`<button class="opt" onclick="useItem(${i})"><b>✛ ${it.kind==='food'?'Eat':'Use'}</b></button>`;
   body+=`<button class="opt" onclick="dropItem2(${i})"><b>▾ Drop</b></button>`;
   body+='<button class="opt" onclick="invScreen()"><b>↩ Back</b></button>';
@@ -1191,6 +1238,8 @@ function itemMenu(i){
 }
 function itemDesc(it){
   if(it.kind==='weapon') return 'Damage '+it.dmg+(it.acc?' · acc '+(it.acc>0?'+':'')+it.acc:'')+(it.ench?' · enchanted +'+it.ench:'');
+  if(it.kind==='bow') return 'Ranged '+it.dmg+' · range '+it.range+' · acc +'+((it.acc||0)+(it.ench||0))+'. Needs arrows.';
+  if(it.kind==='ammo') return 'Ammunition for bows. You have '+arrowCount()+'.';
   if(it.kind==='armor') return 'Armor +'+((it.ac||0)+(it.ench||0));
   if(it.kind==='food') return 'Restores about '+it.sat+' food.';
   if(it.bad) return 'An unidentified, murky brew. Could be anything.';
@@ -1198,11 +1247,12 @@ function itemDesc(it){
 }
 function equipItem(i){
   const it=S.p.inv[i]; if(!it) return invScreen();
-  const slot=it.kind==='weapon'?'weapon':'armor';
+  const slot=it.kind==='bow'?'ranged':it.kind==='weapon'?'weapon':'armor';
+  const verb=slot==='ranged'?'ready':slot==='weapon'?'wield':'wear';
   const cur=S.p[slot];
   S.p[slot]=it; S.p.inv.splice(i,1);
   if(cur) S.p.inv.push(cur);
-  recalc(); msg('You '+(slot==='weapon'?'wield':'wear')+' the '+it.name+'.','good');
+  recalc(); msg('You '+verb+' the '+it.name+'.','good');
   hideScreen(); endTurn();
 }
 function useItem(i){
@@ -1266,6 +1316,7 @@ function openChar(){
     <div class="statline"><span>Divine favor</span><b>${Math.floor(p.piety||0)}</b></div>
     ${p.intrinsics&&p.intrinsics.length?`<div class="statline"><span>Intrinsics</span><b>${p.intrinsics.map(intrinsicName).join(', ')}</b></div>`:''}
     <div class="statline"><span>Wielding</span><b>${p.weapon?itemName(p.weapon):'bare hands'}</b></div>
+    <div class="statline"><span>Bow</span><b>${p.ranged?itemName(p.ranged)+' ('+arrowCount()+' arrows)':'none'}</b></div>
     <div class="statline"><span>Wearing</span><b>${p.armor?itemName(p.armor):'nothing'}</b></div>
     ${p.spells.length?`<div class="statline"><span>Spells</span><b>${p.spells.map(s=>SPELLS[s].name).join(', ')}</b></div>`:''}
     <h2>Class powers</h2>
@@ -1311,7 +1362,7 @@ const KEY={ ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',
   w:'u',s:'d',a:'l',d:'r',
   h:'l',j:'d',k:'u',l:'r',y:'ul',u:'ur',b:'dl',n:'dr',
   '.':'center',' ':'center',g:'center',Enter:'center',
-  i:'inv',z:'cast',c:'cast',r:'rest','>':'stairs','<':'stairs','@':'char' };
+  i:'inv',z:'cast',c:'cast',f:'fire',r:'rest','>':'stairs','<':'stairs','@':'char' };
 document.addEventListener('keydown',(e)=>{
   if(S&&S.mode!=='play') return;
   let k=e.key; const cmd=KEY[k]!==undefined?KEY[k]:(KEY[k.toLowerCase()]);
