@@ -1,0 +1,1378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0b0f">
+<title>ABYSSAL DOMAINS — a pocket roguelike</title>
+<style>
+  :root{
+    --bg:#0b0b0f; --panel:#15151d; --panel2:#1d1d27; --ink:#d8d2c2; --dim:#8a8576;
+    --wall:#5a5142; --floor:#3a3a46; --floorlit:#6b6b80; --gold:#e8b34a; --red:#e2553f;
+    --green:#7fc06a; --blue:#5aa9e6; --mag:#c07bd6; --cyan:#56c8c8; --white:#f2eede;
+    --hp:#d2433a; --mp:#3f74d8; --food:#c8a24a; --xp:#7a52c0;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:ui-monospace,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+    overscroll-behavior:none; touch-action:manipulation; -webkit-user-select:none; user-select:none;}
+  #app{display:flex;flex-direction:column;height:100%;max-width:560px;margin:0 auto;
+    padding:max(6px,env(safe-area-inset-top)) 6px max(6px,env(safe-area-inset-bottom));}
+  /* HUD */
+  #hud{flex:0 0 auto;font-size:12px;line-height:1.25;}
+  .hudrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  .hudname{font-weight:bold;color:var(--white);}
+  .bar{position:relative;height:11px;border:1px solid #000;border-radius:3px;background:#000;flex:1 1 70px;min-width:64px;overflow:hidden;}
+  .bar>i{position:absolute;left:0;top:0;bottom:0;display:block;}
+  .bar>span{position:absolute;left:5px;top:-1px;font-size:10px;color:#fff;text-shadow:0 1px 1px #000;}
+  .pill{background:var(--panel2);border-radius:4px;padding:1px 6px;font-size:11px;color:var(--dim);}
+  .pill b{color:var(--ink);}
+  /* MAP */
+  #mapwrap{flex:1 1 auto;display:flex;align-items:center;justify-content:center;min-height:0;margin:5px 0;}
+  #map{display:grid;line-height:1;letter-spacing:0;background:#000;border:1px solid #26262f;border-radius:6px;padding:2px;}
+  #map span{display:flex;align-items:center;justify-content:center;font-weight:bold;}
+  /* LOG */
+  #log{flex:0 0 auto;height:54px;overflow:hidden;font-size:12px;line-height:1.3;
+    background:var(--panel);border:1px solid #26262f;border-radius:6px;padding:4px 7px;display:flex;flex-direction:column-reverse;}
+  #log div{white-space:normal;}
+  .m-good{color:var(--green);} .m-bad{color:var(--red);} .m-warn{color:var(--gold);}
+  .m-sys{color:var(--blue);} .m-dim{color:var(--dim);}
+  /* CONTROLS */
+  #controls{flex:0 0 auto;display:flex;gap:8px;align-items:stretch;margin-top:6px;}
+  #pad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:5px;width:min(46vw,210px);aspect-ratio:1/1;}
+  #pad button{font-size:18px;}
+  #actcol{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:5px;}
+  button.btn{background:var(--panel2);color:var(--ink);border:1px solid #33333f;border-radius:9px;
+    font-family:inherit;font-weight:bold;font-size:13px;padding:0;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;min-height:38px;line-height:1.05;text-align:center;}
+  button.btn:active{background:#2b2b39;transform:translateY(1px);}
+  button.btn.center{background:#23232f;color:var(--gold);}
+  button.btn.wide{grid-column:span 2;}
+  button.btn[disabled]{opacity:.32;}
+  button.btn small{display:block;font-size:9px;color:var(--dim);font-weight:normal;}
+  /* OVERLAY SCREENS */
+  #screen{position:fixed;inset:0;background:rgba(7,7,11,.96);display:none;flex-direction:column;
+    z-index:20;padding:max(14px,env(safe-area-inset-top)) 16px max(14px,env(safe-area-inset-bottom));overflow:auto;}
+  #screen.show{display:flex;}
+  #screen .wrap{max-width:520px;width:100%;margin:auto;}
+  h1{font-size:26px;letter-spacing:2px;margin:.2em 0;color:var(--gold);text-align:center;}
+  h2{font-size:16px;color:var(--white);margin:.8em 0 .3em;letter-spacing:1px;}
+  .sub{text-align:center;color:var(--dim);font-size:12px;margin-bottom:10px;}
+  .opt{display:block;width:100%;text-align:left;background:var(--panel);border:1px solid #2c2c38;border-radius:10px;
+    color:var(--ink);font-family:inherit;font-size:14px;padding:11px 13px;margin:7px 0;cursor:pointer;}
+  .opt:active{background:var(--panel2);}
+  .opt.sel{border-color:var(--gold);background:#23210f;}
+  .opt b{color:var(--white);} .opt .d{display:block;color:var(--dim);font-size:11.5px;margin-top:3px;line-height:1.35;}
+  .opt .tag{color:var(--gold);font-size:11px;}
+  .invitem{display:flex;justify-content:space-between;gap:8px;}
+  .invitem .q{color:var(--dim);font-size:11px;}
+  .center{text-align:center;}
+  .big{font-size:15px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+  .statline{display:flex;justify-content:space-between;font-size:13px;padding:2px 0;border-bottom:1px solid #20202a;}
+  .glyphkey{font-size:12px;color:var(--dim);line-height:1.7;}
+  .glyphkey b{color:var(--ink);}
+  .hint{color:var(--dim);font-size:11px;text-align:center;margin-top:8px;}
+  a{color:var(--blue);}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="hudrow">
+      <span class="hudname" id="hName">—</span>
+      <span class="pill">DLvl <b id="hDepth">1</b></span>
+      <span class="pill">CLvl <b id="hClvl">1</b></span>
+      <span class="pill">$<b id="hGold">0</b></span>
+      <span class="pill" id="hCorrPill" style="display:none">Chaos <b id="hCorr">0</b></span>
+    </div>
+    <div class="hudrow" style="margin-top:3px">
+      <div class="bar"><i id="hpBar" style="background:var(--hp);width:100%"></i><span id="hpTxt">HP</span></div>
+      <div class="bar"><i id="mpBar" style="background:var(--mp);width:100%"></i><span id="mpTxt">MP</span></div>
+    </div>
+    <div class="hudrow" style="margin-top:3px">
+      <div class="bar"><i id="xpBar" style="background:var(--xp);width:0%"></i><span id="xpTxt">XP</span></div>
+      <div class="bar"><i id="foodBar" style="background:var(--food);width:100%"></i><span id="foodTxt">Food</span></div>
+    </div>
+  </div>
+
+  <div id="mapwrap"><div id="map"></div></div>
+
+  <div id="log"></div>
+
+  <div id="controls">
+    <div id="pad">
+      <button class="btn" data-cmd="ul">↖</button>
+      <button class="btn" data-cmd="u">↑</button>
+      <button class="btn" data-cmd="ur">↗</button>
+      <button class="btn" data-cmd="l">←</button>
+      <button class="btn center" data-cmd="center" id="centerBtn">·<small id="centerLbl">wait</small></button>
+      <button class="btn" data-cmd="r">→</button>
+      <button class="btn" data-cmd="dl">↙</button>
+      <button class="btn" data-cmd="d">↓</button>
+      <button class="btn" data-cmd="dr">↘</button>
+    </div>
+    <div id="actcol">
+      <button class="btn" data-cmd="fire" id="shootBtn">Shoot<small id="shootLbl">f</small></button>
+      <button class="btn" data-cmd="cast" id="castBtn">Cast<small>z</small></button>
+      <button class="btn" data-cmd="inv">Items<small>i</small></button>
+      <button class="btn" data-cmd="rest">Rest<small>R</small></button>
+      <button class="btn" data-cmd="stairs" id="stairBtn">Stairs<small>&gt;</small></button>
+      <button class="btn" data-cmd="char">Hero<small>@</small></button>
+    </div>
+  </div>
+</div>
+
+<div id="screen"><div class="wrap" id="screenBody"></div></div>
+
+<script>
+"use strict";
+/* ============================================================ ABYSSAL DOMAINS
+   A compact, phone-first dungeon roguelike inspired by Ancient Domains of Mystery.
+   Descend the dungeon, fight, loot, level up. Permadeath. Reach the Sanctum,
+   slay its guardian, and claim the Orb of the Ancients.
+============================================================================= */
+
+/* --------------------------------- UTIL ---------------------------------- */
+const rnd  = (n)=>Math.floor(Math.random()*n);              // 0..n-1
+const rng  = (a,b)=>a+Math.floor(Math.random()*(b-a+1));     // a..b inclusive
+const pick = (a)=>a[rnd(a.length)];
+const chance=(p)=>Math.random()*100<p;
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const sign =(n)=>n<0?-1:n>0?1:0;
+function roll(spec){ // "2d6"
+  const m=/(\d+)d(\d+)(?:\+(\d+))?/.exec(spec); if(!m) return parseInt(spec)||0;
+  let t=parseInt(m[3]||0); const n=+m[1],s=+m[2]; for(let i=0;i<n;i++)t+=rng(1,s); return t;
+}
+
+/* --------------------------------- DATA ---------------------------------- */
+// attribute order: str dex tou wil per
+const RACES = [
+  { id:'human', name:'Human', mod:{str:1,dex:1,tou:1,wil:1,per:1}, hp:0, mp:0, light:0,
+    desc:'Balanced and adaptable. +10% experience.', xp:1.10, food:1 },
+  { id:'dwarf', name:'Dwarf', mod:{str:2,dex:-1,tou:3,wil:0,per:1}, hp:6, mp:-4, light:1,
+    desc:'Stout and tough. Sees further in the dark, heavy hitter.', xp:1, food:1 },
+  { id:'elf', name:'Dark Elf', mod:{str:-1,dex:3,tou:-1,wil:2,per:2}, hp:-2, mp:8, light:0,
+    desc:'Lithe and arcane. More mana, deadly accuracy.', xp:1, food:.9 },
+  { id:'troll', name:'Troll', mod:{str:5,dex:-2,tou:5,wil:-3,per:-1}, hp:14, mp:-8, light:0,
+    desc:'Enormous and regenerating, but slow to learn and always hungry.', xp:.8, food:2, regen:3 },
+  { id:'gnome', name:'Gnome', mod:{str:-2,dex:1,tou:0,wil:2,per:3}, hp:-2, mp:4, light:1,
+    desc:'Small and clever. Keen senses, finds more treasure.', xp:1, food:.8, find:1 },
+];
+
+const CLASSES = [
+  { id:'fighter', name:'Fighter', hpL:7, mpL:1, atk:2, crit:5, caster:false,
+    desc:'Master of arms. Most HP, hits hardest. No magic.',
+    start:{ weapon:'longsword', armor:'chainmail', items:['healing','healing','ration'] },
+    mod:{str:2,dex:1,tou:2,wil:0,per:0} },
+  { id:'wizard', name:'Wizard', hpL:4, mpL:6, atk:0, crit:5, caster:true,
+    desc:'Frail but commands fire and force. Starts with spells.',
+    spells:['magic_missile','heal','fireball'],
+    start:{ weapon:'dagger', armor:'robe', items:['mana','mana','ration','teleport'] },
+    mod:{str:-1,dex:1,tou:-1,wil:3,per:1} },
+  { id:'ranger', name:'Ranger', hpL:6, mpL:3, atk:1, crit:12, caster:true,
+    desc:'Bow-hunter and survivor. Shoots from afar, sharp eyes, lethal crits.',
+    spells:['light'],
+    start:{ weapon:'shortsword', armor:'leather', ranged:'shortbow', arrows:25, items:['healing','ration','ration'] },
+    mod:{str:1,dex:2,tou:1,wil:1,per:2} },
+  { id:'thief', name:'Thief', hpL:5, mpL:2, atk:1, crit:20, caster:false,
+    desc:'Strikes from the shadows. Huge crits, finds gold, wakes foes late.',
+    stealth:3, find:1,
+    start:{ weapon:'dagger', armor:'leather', items:['healing','teleport','ration'] },
+    mod:{str:0,dex:3,tou:0,wil:1,per:2} },
+];
+
+// Class powers — passive abilities granted at level milestones (ADOM-style class powers).
+const POWERS={
+  fighter:[ {lvl:1, id:'weapon_master',  name:'Weapon Master', desc:'+1 melee damage for every 4 levels.'},
+            {lvl:6, id:'second_wind',    name:'Second Wind',   desc:'Heal 25% of your HP whenever you kill a foe.'},
+            {lvl:12,id:'cleave',         name:'Cleave',        desc:'Your blows may carry into a second adjacent enemy.'} ],
+  wizard: [ {lvl:1, id:'arcane_font',    name:'Arcane Font',   desc:'Regenerate mana much faster.'},
+            {lvl:6, id:'spell_power',    name:'Spell Power',   desc:'+3 damage to all damaging spells.'},
+            {lvl:12,id:'pyromancer',     name:'Pyromancer',    desc:'Fireball costs 3 less mana.'} ],
+  ranger: [ {lvl:1, id:'keen_eye',       name:'Keen Eye',      desc:'+1 accuracy and +1 sight radius.'},
+            {lvl:6, id:'deadly_precision',name:'Deadly Precision',desc:'+8% critical hit chance.'},
+            {lvl:12,id:'survivor',       name:'Survivor',      desc:'Regenerate HP faster.'} ],
+  thief:  [ {lvl:1, id:'backstab',       name:'Backstab',      desc:'Deal massive damage to unaware foes.'},
+            {lvl:6, id:'fortune',        name:"Fortune's Favor",desc:'+1 loot found and +6% dodge.'},
+            {lvl:12,id:'shadowstep',     name:'Shadowstep',    desc:'After a kill, you may melt into the shadows.'} ],
+};
+function allPowers(){ const r=[]; for(const k in POWERS) r.push(...POWERS[k]); return r; }
+function powerById(id){ return allPowers().find(p=>p.id===id); }
+
+// Talents — chosen by the player every couple of levels. Stackable.
+const TALENT_LEVELS=2; // a talent pick every N character levels
+const TALENTS=[
+  { id:'might',     name:'Might',             desc:'+2 Strength',                 apply:p=>{p.attr.str+=2;} },
+  { id:'agility',   name:'Agility',           desc:'+2 Dexterity',                apply:p=>{p.attr.dex+=2;} },
+  { id:'hardy',     name:'Hardiness',         desc:'+2 Toughness',                apply:p=>{p.attr.tou+=2;} },
+  { id:'attuned',   name:'Attunement',        desc:'+2 Willpower',                apply:p=>{p.attr.wil+=2;} },
+  { id:'keen',      name:'Keen Senses',       desc:'+2 Perception (more sight)',  apply:p=>{p.attr.per+=2;} },
+  { id:'toughness', name:'Iron Constitution', desc:'+10 maximum HP',              apply:p=>{p.bonHP+=10;} },
+  { id:'precision', name:'Precision',         desc:'+3 accuracy',                 apply:p=>{p.bonAcc+=3;} },
+  { id:'deadly',    name:'Deadly Aim',        desc:'+6% critical chance',         apply:p=>{p.bonCrit+=6;} },
+  { id:'evasion',   name:'Evasion',           desc:'+8% chance to dodge attacks', apply:p=>{p.dodge+=8;} },
+  { id:'regener',   name:'Fast Healer',       desc:'Regenerate HP faster',        apply:p=>{p.bonRegen+=1;} },
+  { id:'ironguts',  name:'Iron Guts',         desc:'Take half damage from poison', apply:p=>{p.poisonRes=1;} },
+  { id:'treasure',  name:'Treasure Sense',    desc:'Find more loot',              apply:p=>{p.find=(p.find||0)+1;} },
+  { id:'spellcraft',name:'Spellcraft', caster:1, desc:'+2 spell power, +6 max mana', apply:p=>{p.spellPow+=2; p.bonMP+=6;} },
+];
+
+// Corruption — the signature ADOM mechanic. It rises as you delve and from
+// chaos-touched foes; each threshold warps your body with a mutation.
+const CORR_PER_MUT=100;
+const MUTATIONS=[
+  { id:'claws',   good:1, name:'Chaos Claws',  desc:'Wicked claws sprout from your hands. +3 melee damage.' },
+  { id:'scales',  good:1, name:'Scaled Hide',  desc:'Hardened scales sheathe you. +2 armor class.' },
+  { id:'brawn',   good:1, name:'Brute Muscle', desc:'Your sinews swell. +2 Strength.', apply:p=>{p.attr.str+=2;}, unapply:p=>{p.attr.str=Math.max(1,p.attr.str-2);} },
+  { id:'eyes',    good:1, name:'Night Eyes',   desc:'Your eyes adapt to the dark. +2 sight radius.' },
+  { id:'mregen',  good:1, name:'Trollblood',   desc:'Your flesh knits unnaturally fast. Rapid HP regeneration.' },
+  { id:'venom',   good:1, name:'Venom Glands', desc:'Your touch drips poison. Your hits envenom foes.' },
+  { id:'frail',   good:0, name:'Brittle Bones',desc:'Your skeleton creaks and cracks. -1 Toughness.', apply:p=>{p.attr.tou=Math.max(1,p.attr.tou-1);}, unapply:p=>{p.attr.tou+=1;} },
+  { id:'feeble',  good:0, name:'Withered Arm', desc:'One arm shrivels. -2 Strength.', apply:p=>{p.attr.str=Math.max(1,p.attr.str-2);}, unapply:p=>{p.attr.str+=2;} },
+  { id:'teleport',good:0, name:'Teleportitis', desc:'Reality slips around you — you blink at random.' },
+  { id:'hunger',  good:0, name:'Burning Gut',  desc:'A furnace churns within. You hunger far faster.' },
+  { id:'manaburn',good:0, name:'Leaking Aura', desc:'Power bleeds from you. -6 maximum mana.' },
+  { id:'fragile', good:0, name:'Glass Flesh',  desc:'Your body turns delicate. -8 maximum HP.' },
+];
+function mutById(id){ return MUTATIONS.find(m=>m.id===id); }
+function hasMut(id){ return S.p && S.p.mutations && S.p.mutations.includes(id); }
+function hasPower(id){ return S.p && S.p.powers && S.p.powers.includes(id); }
+
+/* ---------- Phase 2: identification, intrinsics, artifacts, gods --------- */
+const POTION_LOOKS=['ruby','azure','murky','fizzy','golden','smoky','bubbling','milky','dark','glowing','oily','viscous','crimson','emerald','silvery'];
+const SCROLL_LOOKS=['ZELGO KEK','JUYNED','NR 9','XIXAXA','PRATYAVAYAH','VENZAR FORBRYDERNE','HACKEM MUCHE','ELAM EBOW','READ ME','GHOTI','KIRJE','VELOX NEB'];
+const GODS=['Issaril the Keeper','Mordeth the Unmaker','Varna of the Deep','the Nameless Light','Ssarra Twin-Fanged'];
+const INTRINSICS={ poison_res:'poison resistance', fire_res:'fire resistance', regen:'rapid regeneration', might:'a surge of might' };
+function intrinsicName(id){ return INTRINSICS[id]||id; }
+function applyIntrinsic(id){ const p=S.p;
+  if(id==='poison_res') p.poisonRes=1;
+  else if(id==='fire_res') p.fireRes=1;
+  else if(id==='regen') p.bonRegen+=1;
+  else if(id==='might') p.attr.str+=1;
+}
+function hasFireRes(){ return (S.p.fireRes) || (S.p.armor && S.p.armor.fireRes); }
+
+const ARTIFACTS={
+  whisper:    { id:'whisper',    kind:'weapon', name:'Whisper, the Sundering Blade', g:'/', dmg:'2d6', acc:3, ench:2, artifact:1, val:240 },
+  soulreaver: { id:'soulreaver', kind:'weapon', name:'Soulreaver', g:'/', dmg:'1d10', acc:1, ench:1, artifact:1, lifesteal:1, val:220 },
+  drakescale: { id:'drakescale', kind:'armor',  name:'Drakescale Hauberk', g:'[', ac:8, artifact:1, fireRes:1, val:260 },
+};
+function mkArtifact(id){ return Object.assign({}, ARTIFACTS[id]); }
+function assignAppearances(){
+  S.appear={potions:{},scrolls:{}}; S.known={};
+  const pl=shuffle(POTION_LOOKS.slice()); let i=0; for(const id in POTIONS) S.appear.potions[id]=pl[i++];
+  const sl=shuffle(SCROLL_LOOKS.slice()); i=0; for(const id in SCROLLS) S.appear.scrolls[id]=sl[i++];
+}
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=rnd(i+1); const t=a[i];a[i]=a[j];a[j]=t; } return a; }
+function isKnown(it){ return it.artifact || (S.known && S.known[it.id]); }
+function setKnown(id,announce){ if(S.known && !S.known[id]){ S.known[id]=true; if(announce){ const it=ITEM_DB[id]; if(it) msg('It was '+aOrAn(it.name)+'!','sys'); } } }
+function aOrAn(s){ return (/^[aeiou]/i.test(s)?'an ':'a ')+s; }
+
+/* ---------- Phase 3: town NPCs ---------- */
+const NPCS=[
+  { id:'elder', g:'E', c:'#fd5', name:'Elder Maro' },
+  { id:'healer',g:'H', c:'#7df', name:'the Healer' },
+  { id:'shop',  g:'M', c:'#7e7', name:'the Merchant' },
+  { id:'sage',  g:'G', c:'#9bf', name:'the Sage' },
+  { id:'inn',   g:'I', c:'#fb9', name:'the Innkeeper' },
+];
+const SHOP_STOCK=['healing','greater','mana','ration','ration','teleport','mapping','identify','enchant_w','enchant_a','shortsword','longsword','mace','leather','chainmail','shortbow','longbow','arrow'];
+
+// glyph colors
+const COL={ '#':'var(--wall)','.':'var(--floor)','+':'var(--gold)','>':'var(--cyan)','<':'var(--cyan)',
+  '@':'var(--white)','$':'var(--gold)','!':'var(--red)','?':'var(--white)','/':'var(--cyan)','[':'var(--blue)',
+  '%':'var(--food)','*':'var(--mag)','=':'var(--gold)','_':'var(--mag)','}':'var(--cyan)' };
+
+// Monsters. d = first depth it appears. spd: 'fast' acts twice, 'slow' every other.
+const MONSTERS = [
+  { id:'rat',     g:'r', c:'#b78', name:'giant rat',     d:1, hp:'1d4',  acc:8,  def:11, dmg:'1d3', xp:2,  spd:'norm' },
+  { id:'bat',     g:'b', c:'#a9c', name:'cave bat',      d:1, hp:'1d4',  acc:10, def:14, dmg:'1d3', xp:3,  spd:'fast', erratic:1 },
+  { id:'kobold',  g:'k', c:'#9b7', name:'kobold',        d:1, hp:'1d6',  acc:9,  def:12, dmg:'1d4', xp:3 },
+  { id:'snake',   g:'S', c:'#7c6', name:'cave snake',    d:2, hp:'1d6',  acc:11, def:13, dmg:'1d3', xp:5,  poison:2, eat:'poison_res' },
+  { id:'jackal',  g:'j', c:'#c96', name:'jackal',        d:2, hp:'1d6',  acc:11, def:13, dmg:'1d4', xp:4,  spd:'fast' },
+  { id:'goblin',  g:'g', c:'#8c6', name:'goblin',        d:3, hp:'2d4',  acc:12, def:13, dmg:'1d6', xp:6 },
+  { id:'spider',  g:'s', c:'#caa', name:'giant spider',  d:3, hp:'1d8',  acc:13, def:15, dmg:'1d4', xp:7,  poison:3, eat:'poison_res' },
+  { id:'orc',     g:'o', c:'#7a5', name:'orc',           d:4, hp:'2d6',  acc:13, def:13, dmg:'1d8', xp:9 },
+  { id:'zombie',  g:'z', c:'#9a9', name:'zombie',        d:4, hp:'2d8',  acc:11, def:10, dmg:'1d8', xp:8,  spd:'slow' },
+  { id:'gnoll',   g:'G', c:'#b85', name:'gnoll',         d:5, hp:'3d6',  acc:14, def:14, dmg:'1d10',xp:12 },
+  { id:'wolf',    g:'w', c:'#aaa', name:'dire wolf',     d:5, hp:'2d8',  acc:14, def:15, dmg:'1d8', xp:11, spd:'fast' },
+  { id:'ogre',    g:'O', c:'#c76', name:'ogre',          d:6, hp:'4d8',  acc:14, def:11, dmg:'2d6', xp:18, spd:'slow', eat:'might' },
+  { id:'skeleton',g:'Z', c:'#dda', name:'skeleton lord', d:6, hp:'3d8',  acc:15, def:15, dmg:'1d10',xp:16 },
+  { id:'wraith',  g:'W', c:'#aef', name:'wraith',        d:7, hp:'3d8',  acc:16, def:17, dmg:'2d6', xp:24, drain:1, corrupt:7 },
+  { id:'troll_m', g:'T', c:'#5b5', name:'cave troll',    d:7, hp:'6d8',  acc:16, def:14, dmg:'2d8', xp:30, regen:2, eat:'regen' },
+  { id:'vampire', g:'V', c:'#d6f', name:'vampire',       d:8, hp:'4d8',  acc:17, def:18, dmg:'2d6', xp:34, drain:1, spd:'fast', corrupt:9 },
+  { id:'wyrmlet', g:'d', c:'#f96', name:'fire drake',    d:9, hp:'5d8',  acc:17, def:16, dmg:'2d8', xp:40, breath:'2d6', eat:'fire_res' },
+  { id:'demon',   g:'&', c:'#f55', name:'lesser demon',  d:9, hp:'6d8',  acc:18, def:18, dmg:'3d6', xp:48, corrupt:12, eat:'fire_res' },
+  { id:'wyrm',    g:'D', c:'#fd5', name:'ANCIENT WYRM',  d:99,hp:'12d10',acc:20, def:19, dmg:'3d8', xp:300, breath:'4d6', boss:1, spd:'norm', corrupt:20 },
+];
+
+const WEAPONS = {
+  dagger:    { name:'dagger',       g:'/', dmg:'1d4',  acc:1, val:5 },
+  shortsword:{ name:'short sword',  g:'/', dmg:'1d6',  acc:1, val:12 },
+  mace:      { name:'mace',         g:'/', dmg:'1d7',  acc:0, val:14 },
+  longsword: { name:'long sword',   g:'/', dmg:'1d8',  acc:1, val:22 },
+  battleaxe: { name:'battle axe',   g:'/', dmg:'2d4',  acc:0, val:26 },
+  warhammer: { name:'war hammer',   g:'/', dmg:'1d10', acc:-1,val:30 },
+  greatsword:{ name:'great sword',  g:'/', dmg:'2d6',  acc:0, val:40 },
+};
+const ARMORS = {
+  robe:     { name:'cloth robe',     g:'[', ac:0, val:3 },
+  leather:  { name:'leather armor',  g:'[', ac:2, val:10 },
+  studded:  { name:'studded leather',g:'[', ac:3, val:18 },
+  chainmail:{ name:'chain mail',     g:'[', ac:4, val:28 },
+  scale:    { name:'scale mail',     g:'[', ac:5, val:40 },
+  plate:    { name:'plate mail',     g:'[', ac:7, val:60 },
+};
+// consumables
+const POTIONS = {
+  healing:  { name:'potion of healing',        g:'!', kind:'potion', val:12, use:(p)=>{ const h=roll('3d6')+8; heal(h); msg('You feel much better. +'+h+' HP','good'); } },
+  greater:  { name:'potion of greater healing',g:'!', kind:'potion', val:30, use:(p)=>{ heal(999); msg('Warmth floods you — fully healed!','good'); } },
+  mana:     { name:'potion of mana',           g:'!', kind:'potion', val:14, use:(p)=>{ const m=roll('3d6')+6; S.p.mp=clamp(S.p.mp+m,0,S.p.maxmp); msg('Arcane energy surges. +'+m+' MP','sys'); } },
+  strength: { name:'potion of strength',       g:'!', kind:'potion', val:40, use:(p)=>{ S.p.attr.str++; recalc(); msg('You feel stronger! +1 STR','good'); } },
+  agility:  { name:'potion of agility',        g:'!', kind:'potion', val:40, use:(p)=>{ S.p.attr.dex++; recalc(); msg('You feel quicker! +1 DEX','good'); } },
+  life:     { name:'potion of life',           g:'!', kind:'potion', val:60, use:(p)=>{ S.p.attr.tou++; S.p.maxhp+=6; heal(6); recalc(); msg('Vitality blooms. +1 TOU, +6 max HP','good'); } },
+  exp:      { name:'potion of experience',     g:'!', kind:'potion', val:50, use:(p)=>{ gainXP(Math.floor(S.p.xpNext*0.45)); msg('Insight! Experience gained.','good'); } },
+  poison:   { name:'murky potion',             g:'!', kind:'potion', val:5,  bad:1, use:(p)=>{ S.p.poison=(S.p.poison||0)+6; msg('Ugh — that was poison!','bad'); } },
+};
+const SCROLLS = {
+  teleport: { name:'scroll of teleport',     g:'?', kind:'scroll', val:14, use:(p)=>{ teleport(); msg('Reality folds — you blink away.','sys'); } },
+  mapping:  { name:'scroll of magic mapping',g:'?', kind:'scroll', val:18, use:(p)=>{ revealMap(); msg('The dungeon imprints on your mind.','sys'); } },
+  enchant_w:{ name:'scroll of enchant weapon',g:'?',kind:'scroll', val:30, use:(p)=>{ if(S.p.weapon){S.p.weapon.ench=(S.p.weapon.ench||0)+1; msg('Your '+S.p.weapon.name+' glows sharper. (+'+S.p.weapon.ench+')','good');} else msg('You have no weapon to enchant.','dim'); } },
+  enchant_a:{ name:'scroll of enchant armor', g:'?',kind:'scroll', val:30, use:(p)=>{ if(S.p.armor){S.p.armor.ench=(S.p.armor.ench||0)+1; recalc(); msg('Your '+S.p.armor.name+' hardens. (+'+S.p.armor.ench+')','good');} else msg('You wear no armor.','dim'); } },
+  identify: { name:'scroll of identify',     g:'?', kind:'scroll', val:16, use:(p)=>{ identifyOne(); } },
+  light:    { name:'scroll of light',        g:'?', kind:'scroll', val:8,  use:(p)=>{ litRoom(); msg('Light blossoms around you.','sys'); } },
+  fire:     { name:'scroll of flame',        g:'?', kind:'scroll', val:22, use:(p)=>{ scrollFlame(); } },
+};
+const FOODS = {
+  ration:{ name:'food ration', g:'%', kind:'food', val:6, sat:700, use:(p)=>{ S.p.food=clamp(S.p.food+700,0,S.p.foodMax); msg('You eat the ration. Satisfying.','dim'); } },
+  apple: { name:'apple',       g:'%', kind:'food', val:2, sat:250, use:(p)=>{ S.p.food=clamp(S.p.food+250,0,S.p.foodMax); msg('You munch an apple.','dim'); } },
+  corpse:{ name:'fresh corpse',g:'%', kind:'food', val:0, sat:200, use:(p,it)=>{ p.food=clamp(p.food+200,0,p.foodMax);
+    const tpl=it&&it.from?MONSTERS.find(m=>m.id===it.from):null;
+    if(tpl&&tpl.eat && p.intrinsics && !p.intrinsics.includes(tpl.eat) && chance(50)){ p.intrinsics.push(tpl.eat); applyIntrinsic(tpl.eat); recalc(); msg('Strange power floods you — you gain '+intrinsicName(tpl.eat)+'!','good'); }
+    else if(tpl&&tpl.poison && chance(45)){ p.poison=(p.poison||0)+4; msg('The tainted flesh sickens you.','bad'); }
+    else msg('You eat the '+(tpl?tpl.name:'')+' corpse. Grim, but filling.','dim'); } },
+};
+const SPELLS = {
+  magic_missile:{ name:'Magic Missile', cost:3,  desc:'Bolt of force at the nearest foe.', cast:()=>spellBolt('1d8',2,'force') },
+  fireball:     { name:'Fireball',      cost:10, desc:'Explosion centred on a distant foe.', cast:()=>spellFireball('3d6') },
+  heal:         { name:'Heal Wounds',   cost:6,  desc:'Mend your own wounds.', cast:()=>{ const h=roll('2d8')+6; heal(h); msg('You knit your wounds. +'+h+' HP','good'); return true; } },
+  light:        { name:'Light',         cost:2,  desc:'Illuminate your surroundings.', cast:()=>{ litRoom(); msg('Light floods the area.','sys'); return true; } },
+  teleport:     { name:'Blink',         cost:8,  desc:'Teleport to a random location.', cast:()=>{ teleport(); msg('You blink across the dungeon.','sys'); return true; } },
+};
+
+const BOWS = {
+  shortbow:{ name:'short bow', g:'}', dmg:'1d6',  acc:2, range:6, val:18 },
+  longbow: { name:'long bow',  g:'}', dmg:'1d8',  acc:3, range:8, val:34 },
+  crossbow:{ name:'crossbow',  g:'}', dmg:'1d10', acc:1, range:7, val:48 },
+};
+const AMMO = { arrow:{ name:'arrows', g:'/', val:1 } };
+
+const ITEM_DB = Object.assign({},
+  mapObj(WEAPONS,'weapon'), mapObj(ARMORS,'armor'), mapObj(BOWS,'bow'), mapObj(AMMO,'ammo'),
+  POTIONS, SCROLLS, FOODS );
+function mapObj(src,kind){ const o={}; for(const k in src){ o[k]=Object.assign({kind},src[k]); } return o; }
+
+/* ------------------------------- CONSTANTS ------------------------------- */
+const MW=46, MH=30;          // internal map size
+let COLS=21, ROWS=15;        // viewport (computed for screen)
+const WIN_DEPTH=10;          // the Sanctum
+const HISCORE_KEY='abyssal_hi_v1';
+
+/* --------------------------------- STATE --------------------------------- */
+let S=null;
+function newState(){ return { p:null, depth:0, map:null, seen:null, vis:null, mons:[], items:[], up:null, down:null,
+  turn:0, over:false, won:false, log:[], orb:false, mode:'play',
+  town:false, artiSeen:[], quests:null, appear:null, known:null }; }
+
+/* ------------------------------ MAP GENERATION --------------------------- */
+function blankMap(){ const m=[]; for(let y=0;y<MH;y++){ m.push(new Array(MW).fill('#')); } return m; }
+function initSeenVis(){ S.seen=[]; S.vis=[]; for(let y=0;y<MH;y++){ S.seen.push(new Array(MW).fill(false)); S.vis.push(new Array(MW).fill(false)); } }
+function buildTown(){
+  const L=genLevel(1); // depth arg 1 just to ensure a '>' staircase is carved
+  S.map=L.map; S.up=L.up; S.down=L.down; S.depth=0; S.town=true;
+  if(S.up) S.map[S.up.y][S.up.x]='.'; // the surface has no up-stair
+  initSeenVis(); S.mons=[]; S.items=[];
+  S.p.x=L.up.x; S.p.y=L.up.y;
+  const rooms=L.rooms.slice(); const downRoom=rooms[rooms.length-1];
+  const avail=rooms.filter(r=>r!==downRoom); shuffle(avail);
+  NPCS.forEach((npc,idx)=>{
+    const r=avail[idx%avail.length] || rooms[idx%rooms.length];
+    let x=r.cx, y=r.cy;
+    if((x===S.p.x&&y===S.p.y)||S.map[y][x]!=='.'||monAt(x,y)){ const c=findFreeNear(r); if(c){x=c.x;y=c.y;} }
+    if(S.map[y][x]==='.' && !monAt(x,y) && !(x===S.p.x&&y===S.p.y))
+      S.mons.push({npc:npc.id, g:npc.g, c:npc.c, name:npc.name, x, y, friendly:true, hp:9999, asleep:false});
+  });
+  computeFOV(); // town is fully lit (see computeFOV town branch)
+}
+function findFreeNear(r){ for(let y=r.y;y<r.y+r.h;y++)for(let x=r.x;x<r.x+r.w;x++){ if(S.map[y][x]==='.'&&!(x===S.p.x&&y===S.p.y)&&!monAt(x,y)) return {x,y}; } return null; }
+function genLevel(depth){
+  const map=blankMap(); const rooms=[];
+  const tries=rng(9,13);
+  for(let t=0;t<tries;t++){
+    const w=rng(4,9), h=rng(3,6);
+    const x=rng(1,MW-w-2), y=rng(1,MH-h-2);
+    const r={x,y,w,h,cx:x+(w>>1),cy:y+(h>>1)};
+    let ok=true;
+    for(const o of rooms){ if(x<o.x+o.w+1 && x+w+1>o.x && y<o.y+o.h+1 && y+h+1>o.y){ok=false;break;} }
+    if(!ok) continue;
+    for(let yy=y;yy<y+h;yy++) for(let xx=x;xx<x+w;xx++) map[yy][xx]='.';
+    rooms.push(r);
+  }
+  // connect rooms in order
+  for(let i=1;i<rooms.length;i++){ carveCorridor(map, rooms[i-1], rooms[i]); }
+  // sometimes a few doors at room edges
+  // place stairs
+  const upRoom=rooms[0], downRoom=rooms[rooms.length-1];
+  const up={x:upRoom.cx,y:upRoom.cy}; map[up.y][up.x]='<';
+  let down=null;
+  if(depth<WIN_DEPTH){ down={x:downRoom.cx,y:downRoom.cy}; map[down.y][down.x]='>'; }
+  return {map,rooms,up,down};
+}
+function carveCorridor(map,a,b){
+  let x=a.cx,y=a.cy; const tx=b.cx,ty=b.cy;
+  const horizFirst=chance(50);
+  const stepX=()=>{ while(x!==tx){ x+=sign(tx-x); if(map[y][x]==='#')map[y][x]='.'; } };
+  const stepY=()=>{ while(y!==ty){ y+=sign(ty-y); if(map[y][x]==='#')map[y][x]='.'; } };
+  if(horizFirst){ stepX(); stepY(); } else { stepY(); stepX(); }
+}
+
+function buildLevel(depth, cameFromBelow){
+  const L=genLevel(depth);
+  S.map=L.map; S.up=L.up; S.down=L.down; S.depth=depth; S.town=false;
+  initSeenVis();
+  S.mons=[]; S.items=[];
+  // place player
+  const start = cameFromBelow ? L.down : L.up;
+  S.p.x=start.x; S.p.y=start.y;
+  // populate monsters
+  const pool=MONSTERS.filter(m=>!m.boss && m.d<=depth);
+  const count=rng(5,8)+Math.floor(depth*0.7);
+  for(let i=0;i<count;i++){
+    const cell=randFloor(true); if(!cell) break;
+    // bias toward higher-tier monsters as you descend
+    let m=pick(pool);
+    if(chance(40)){ const m2=pick(pool); if(m2.d>m.d) m=m2; }
+    spawnMonster(m,cell.x,cell.y);
+  }
+  // items
+  const ic=rng(2,4)+Math.floor(depth/3)+(classOf().find?classOf().find:0)+(raceOf().find?raceOf().find:0);
+  for(let i=0;i<ic;i++){ const cell=randFloor(true); if(!cell)break; dropItem(rollItem(depth),cell.x,cell.y); }
+  // gold piles
+  for(let i=0;i<rng(2,5);i++){ const cell=randFloor(true); if(!cell)break; S.items.push({x:cell.x,y:cell.y,gold:rng(3,12)+depth*2,g:'$'}); }
+  // a dark altar, now and then
+  if(depth>=2 && depth<WIN_DEPTH && chance(45)){ const rr=pick(L.rooms); const ax=rr.cx, ay=rr.cy; if(S.map[ay][ax]==='.'&&!(ax===S.p.x&&ay===S.p.y)) S.map[ay][ax]='_'; }
+  // The Sanctum: boss + orb
+  if(depth>=WIN_DEPTH){
+    const r=L.rooms[L.rooms.length-1];
+    const bx=clamp(r.cx,1,MW-2), by=clamp(r.cy,1,MH-2);
+    spawnMonster(MONSTERS.find(m=>m.id==='wyrm'), bx, by);
+    // orb near boss
+    let oc=randFloor(true)||{x:r.x+1,y:r.y+1};
+    S.items.push({x:oc.x,y:oc.y,orb:true,g:'*',name:'the Orb of the Ancients'});
+    const av=Object.keys(ARTIFACTS).filter(id=>!S.artiSeen.includes(id));
+    if(av.length){ const id=pick(av); S.artiSeen.push(id); const ac=randFloor(true); if(ac) dropItem(mkArtifact(id),ac.x,ac.y); }
+    msg('The air is thick with ancient power. The guardian stirs...','warn');
+  }
+  computeFOV();
+}
+function randFloor(empty){
+  for(let t=0;t<400;t++){ const x=rng(1,MW-2),y=rng(1,MH-2);
+    if(S.map[y][x]!=='.') continue;
+    if(x===S.p.x&&y===S.p.y) continue;
+    if(empty){ if(monAt(x,y)||itemAt(x,y)) continue; }
+    return {x,y};
+  } return null;
+}
+function rollItem(depth){
+  // rare artifacts in the deep
+  if(depth>=5 && chance(7)){
+    const avail=Object.keys(ARTIFACTS).filter(id=>!S.artiSeen.includes(id));
+    if(avail.length){ const id=pick(avail); S.artiSeen.push(id); return mkArtifact(id); }
+  }
+  if(chance(8)){ const a=mkItem('arrow'); a.qty=rng(8,16); return a; } // a quiver of arrows
+  const r=rng(1,100);
+  if(r<=30){ // potion
+    const t=weightedPick([['healing',30],['mana',18],['greater',6],['strength',5],['agility',5],['life',4],['exp',6],['poison',10]]); return mkItem(t);
+  } else if(r<=52){ // scroll
+    const t=weightedPick([['teleport',18],['mapping',16],['enchant_w',12],['enchant_a',12],['light',14],['fire',10]]); return mkItem(t);
+  } else if(r<=66){ // food
+    return mkItem(weightedPick([['ration',60],['apple',40]]));
+  } else if(r<=84){ // weapon (sometimes a bow)
+    if(chance(28)){ const bk=Object.keys(BOWS); return mkItem(bk[clamp(Math.floor(depth/3),0,bk.length-1)]); }
+    const keys=Object.keys(WEAPONS); const idx=clamp(Math.floor(depth/2)+rng(0,2),0,keys.length-1); return mkItem(keys[idx]);
+  } else { // armor
+    const keys=Object.keys(ARMORS); const idx=clamp(Math.floor(depth/2.2)+rng(0,1),0,keys.length-1); return mkItem(keys[idx]);
+  }
+}
+function weightedPick(pairs){ let tot=0; pairs.forEach(p=>tot+=p[1]); let r=rng(1,tot); for(const p of pairs){ r-=p[1]; if(r<=0)return p[0]; } return pairs[0][0]; }
+function mkItem(id){ const base=ITEM_DB[id]; return Object.assign({id}, base); }
+function mkCorpse(monId){ const tpl=MONSTERS.find(m=>m.id===monId); const c=Object.assign({},FOODS.corpse); c.id='corpse'; c.from=monId; c.name=(tpl?tpl.name:'')+' corpse'; c.qty=1; return c; }
+function dropItem(it,x,y){ S.items.push(Object.assign({x,y,g:it.g||'?'},{item:it})); }
+
+/* ------------------------------- ENTITIES -------------------------------- */
+function spawnMonster(tpl,x,y){
+  const hp=roll(tpl.hp);
+  S.mons.push({ id:tpl.id, g:tpl.g, c:tpl.c, name:tpl.name, x, y, hp, maxhp:hp,
+    acc:tpl.acc, def:tpl.def, dmg:tpl.dmg, xp:tpl.xp, spd:tpl.spd||'norm',
+    poison:tpl.poison||0, drain:tpl.drain||0, regen:tpl.regen||0, breath:tpl.breath||null,
+    erratic:tpl.erratic||0, boss:tpl.boss||0, asleep:true, slowtick:false });
+}
+function monAt(x,y){ return S.mons.find(m=>m.x===x&&m.y===y); }
+function itemAt(x,y){ return S.items.find(it=>it.x===x&&it.y===y); }
+
+/* ------------------------------ PLAYER SETUP ----------------------------- */
+function raceOf(){ return RACES.find(r=>r.id===S.p.race); }
+function classOf(){ return CLASSES.find(c=>c.id===S.p.cls); }
+function createPlayer(raceId,clsId,name){
+  const R=RACES.find(r=>r.id===raceId), C=CLASSES.find(c=>c.id===clsId);
+  const attr={str:10,dex:10,tou:10,wil:10,per:10};
+  for(const k in attr){ attr[k]+=(R.mod[k]||0)+(C.mod[k]||0); }
+  const p={ name:name||C.name, race:raceId, cls:clsId, attr,
+    level:1, xp:0, xpNext:20, gold:0,
+    x:0,y:0, weapon:null, armor:null, ranged:null, inv:[], spells:(C.spells||[]).slice(),
+    food:1400, foodMax:1600, poison:0, regenTick:0, mpTick:0,
+    crit:C.crit, find:(C.find||0)+(R.find||0),
+    // talents / powers / corruption
+    powers:[], mutations:[], corruption:0, mutCount:0, pendingTalents:0,
+    bonHP:0, bonMP:0, bonAcc:0, bonCrit:0, bonLight:0, bonRegen:0, bonRegenMP:0,
+    dodge:0, poisonRes:0, spellPow:0,
+    // gods & intrinsics
+    piety:30, prayTimer:0, intrinsics:[], fireRes:0, god:pick(GODS) };
+  S.p=p; recalc(); p.hp=p.maxhp; p.mp=p.maxmp;
+  // starting gear
+  const st=C.start;
+  if(st.weapon){ p.weapon=mkItem(st.weapon); }
+  if(st.armor){ p.armor=mkItem(st.armor); }
+  if(st.ranged){ p.ranged=mkItem(st.ranged); }
+  if(st.arrows){ addArrows(st.arrows); }
+  (st.items||[]).forEach(id=>addInv(mkItem(id)));
+  // level-1 class powers
+  (POWERS[clsId]||[]).forEach(pw=>{ if(pw.lvl<=1) applyPower(pw.id,true); });
+  recalc(); p.hp=p.maxhp; p.mp=p.maxmp;
+}
+function applyPower(id,quiet){
+  const p=S.p; if(p.powers.includes(id)) return; p.powers.push(id);
+  switch(id){
+    case 'arcane_font': p.bonRegenMP+=2; break;
+    case 'spell_power': p.spellPow+=3; break;
+    case 'keen_eye':    p.bonAcc+=1; p.bonLight+=1; break;
+    case 'deadly_precision': p.bonCrit+=8; break;
+    case 'survivor':    p.bonRegen+=1; break;
+    case 'fortune':     p.find=(p.find||0)+1; p.dodge+=6; break;
+  }
+  recalc();
+  if(!quiet){ const pw=powerById(id); msg('Class power unlocked — '+(pw?pw.name:id)+'!','good'); }
+}
+function recalc(){
+  const p=S.p, R=raceOf(), C=classOf();
+  p.maxhp=Math.max(1, 14 + p.attr.tou*2 + (p.level-1)*C.hpL + (R.hp||0) + (p.bonHP||0) - (hasMut('fragile')?8:0));
+  p.maxmp=Math.max(0, Math.floor((C.caster?p.attr.wil*1.6:p.attr.wil*0.5)) + (p.level-1)*C.mpL + (R.mp||0) + (p.bonMP||0) - (hasMut('manaburn')?6:0));
+  p.foodMax=1600;
+  p.light=4 + (R.light||0) + Math.floor((p.attr.per-10)/3) + (p.bonLight||0) + (hasMut('eyes')?2:0);
+  p.acc = p.attr.dex + C.atk + Math.floor(p.level/2) + (p.bonAcc||0) + (p.weapon?(p.weapon.acc||0)+(p.weapon.ench||0):0);
+  p.ac  = 10 + Math.floor((p.attr.dex-10)/2) + (p.armor?(p.armor.ac||0)+(p.armor.ench||0):0) + Math.floor((p.attr.tou-10)/4) + (hasMut('scales')?2:0);
+  p.crit = C.crit + (p.bonCrit||0);
+  p.hp=clamp(p.hp??p.maxhp,0,p.maxhp); p.mp=clamp(p.mp??p.maxmp,0,p.maxmp);
+}
+function dmgRoll(){ const p=S.p; const w=p.weapon; let base=w?roll(w.dmg)+(w.ench||0):rng(1,3);
+  base+=Math.floor((p.attr.str-10)/2)+classOf().atk;
+  if(hasMut('claws')) base+=3;
+  if(hasPower('weapon_master')) base+=Math.floor(p.level/4);
+  return base; }
+
+/* --------------------------- TALENTS & CORRUPTION ------------------------ */
+function addCorruption(n){
+  const p=S.p; p.corruption=(p.corruption||0)+n;
+  while(Math.floor(p.corruption/CORR_PER_MUT) > p.mutCount){ p.mutCount++; gainMutation(); }
+}
+function gainMutation(){
+  const p=S.p;
+  const bag=MUTATIONS.filter(m=>!p.mutations.includes(m.id));
+  if(!bag.length){ msg('Chaos roils within you, but your body can warp no further.','warn'); return; }
+  const m=pick(bag); p.mutations.push(m.id);
+  if(m.apply) m.apply(p);
+  recalc();
+  msg('CHAOS WARPS YOU — '+m.name+': '+m.desc, m.good?'warn':'bad');
+}
+function openTalents(){
+  S.mode='menu';
+  const avail=TALENTS.filter(t=>!t.caster || classOf().caster);
+  const offers=[]; const bag=avail.slice();
+  while(offers.length<3 && bag.length) offers.push(bag.splice(rnd(bag.length),1)[0]);
+  let body='<h1 style="font-size:20px">TALENT</h1><div class="sub">Level '+S.p.level+' — choose a talent to master</div>';
+  offers.forEach(t=>{ body+=`<button class="opt" onclick="chooseTalent('${t.id}')"><b>${t.name}</b><span class="d">${t.desc}</span></button>`; });
+  showScreen(body);
+}
+function chooseTalent(id){
+  const t=TALENTS.find(x=>x.id===id); if(t){ t.apply(S.p); recalc(); msg('You master the talent: '+t.name+'.','good'); }
+  S.p.pendingTalents--;
+  if(S.p.pendingTalents>0) openTalents(); else { hideScreen(); render(); }
+}
+function removeMutation(){
+  const p=S.p; if(!p.mutations.length) return false;
+  // prefer to purge a curse
+  let id=p.mutations.find(x=>{const m=mutById(x);return m&&!m.good;}) || p.mutations[0];
+  const m=mutById(id); if(m&&m.unapply) m.unapply(p);
+  p.mutations=p.mutations.filter(x=>x!==id); recalc();
+  return m?m.name:true;
+}
+/* ---- gods: altars, sacrifice, prayer ---- */
+function altarMenu(){
+  S.mode='menu'; const p=S.p;
+  let body='<h1 style="font-size:20px">A DARK ALTAR</h1>';
+  body+='<div class="sub">sacred to '+p.god+' · your favor: '+Math.floor(p.piety)+'</div>';
+  body+=`<button class="opt" onclick="sacrifice(25)"><b>Sacrifice 25 gold</b><span class="d">You have ${p.gold} gold. Offerings earn favor.</span></button>`;
+  body+=`<button class="opt" onclick="sacrifice(-1)"><b>Sacrifice all gold</b><span class="d">Pour out everything you carry.</span></button>`;
+  body+=`<button class="opt" onclick="pray()"><b>Pray</b><span class="d">Beg your god for aid. Do not test their patience.</span></button>`;
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Step away</b></button>';
+  showScreen(body);
+}
+function sacrifice(amt){
+  const p=S.p; let g = amt<0 ? p.gold : Math.min(amt,p.gold);
+  if(g<=0){ msg('You have no gold to offer.','dim'); return altarMenu(); }
+  p.gold-=g; p.piety+=Math.ceil(g*0.6); msg('You offer '+g+' gold. '+p.god+' is pleased.','sys');
+  altarMenu();
+}
+function pray(){
+  const p=S.p; hideScreen();
+  if(p.prayTimer>0){
+    msg(p.god+' is angered by your constant pleading!','bad');
+    const d=rng(4,10); p.hp-=d; p.prayTimer+=40;
+    if(p.hp<=0){ return death(); }
+    return endTurn();
+  }
+  let cost=0, did=false;
+  if(p.hp < p.maxhp*0.5 && p.piety>=40){ heal(999); cost=40; did=true; msg(p.god+' mends your wounds.','good'); }
+  else if(p.poison>0 && p.piety>=25){ p.poison=0; cost=25; did=true; msg(p.god+' purges the venom from your blood.','good'); }
+  else if(p.mutCount>0 && p.corruption>0 && p.piety>=120){ const nm=removeMutation(); p.corruption=Math.max(0,p.corruption-CORR_PER_MUT); p.mutCount=Math.max(0,p.mutCount-1); cost=120; did=true; msg('Holy fire burns the Chaos away'+(nm&&nm!==true?' — '+nm+' fades':'')+'.','good'); }
+  else if(p.piety>=200){ const gift=pick(['greater','enchant_w','enchant_a','life']); addInv(mkItem(gift)); cost=200; did=true; msg(p.god+' grants you a boon — something appears in your pack.','good'); }
+  else { msg('You pray, but '+p.god+' is silent. Earn favor with offerings.','dim'); return endTurn(); }
+  if(did){ p.piety-=cost; p.prayTimer=rng(70,140); recalc(); }
+  endTurn();
+}
+
+function addInv(it){
+  // stack consumables by id (but never artifacts or corpses — they carry unique data)
+  if(it.kind!=='weapon'&&it.kind!=='armor'&&it.id!=='corpse'&&!it.artifact){
+    const ex=S.p.inv.find(x=>x.id===it.id && x.kind===it.kind && !x.ench && !x.artifact);
+    if(ex){ ex.qty=(ex.qty||1)+(it.qty||1); return; }
+  }
+  it.qty=it.qty||1; S.p.inv.push(it);
+}
+
+/* --------------------------------- FOV ----------------------------------- */
+function blocks(x,y){ const t=S.map[y]&&S.map[y][x]; return t==='#'||t==='+'; }
+function computeFOV(){
+  for(let y=0;y<MH;y++) S.vis[y].fill(false);
+  if(S.town){ // the village is safe and fully lit
+    for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){ if(S.map[y][x]!=='#'||hasFloorNeighbor(x,y)){ S.vis[y][x]=true; S.seen[y][x]=true; } }
+    return;
+  }
+  const px=S.p.x,py=S.p.y,R=S.p.light;
+  S.vis[py][px]=true; S.seen[py][px]=true;
+  for(let y=py-R;y<=py+R;y++){ for(let x=px-R;x<=px+R;x++){
+    if(x<0||y<0||x>=MW||y>=MH) continue;
+    const dx=x-px,dy=y-py; if(dx*dx+dy*dy>R*R+R) continue;
+    if(los(px,py,x,y)){ S.vis[y][x]=true; S.seen[y][x]=true; }
+  }}
+}
+function los(x0,y0,x1,y1){
+  let dx=Math.abs(x1-x0),dy=Math.abs(y1-y0), sx=x0<x1?1:-1, sy=y0<y1?1:-1, err=dx-dy, x=x0,y=y0;
+  while(true){
+    if(x===x1&&y===y1) return true;
+    if(!(x===x0&&y===y0)){ if(blocks(x,y)) return false; }
+    const e2=2*err; if(e2>-dy){err-=dy;x+=sx;} if(e2<dx){err+=dx;y+=sy;}
+  }
+}
+
+/* ------------------------------- ACTIONS --------------------------------- */
+const DIRS={ ul:[-1,-1],u:[0,-1],ur:[1,-1],l:[-1,0],r:[1,0],dl:[-1,1],d:[0,1],dr:[1,1] };
+function act(cmd){
+  if(S.over){ return; }
+  if(S.mode!=='play') return;
+  if(DIRS[cmd]){ const [dx,dy]=DIRS[cmd]; return playerMove(dx,dy); }
+  switch(cmd){
+    case 'center': return centerAction();
+    case 'rest':   return restCmd();
+    case 'stairs': return useStairs();
+    case 'fire':   return fire();
+    case 'inv':    return openInventory();
+    case 'cast':   return openCast();
+    case 'char':   return openChar();
+  }
+}
+function playerMove(dx,dy){
+  const nx=S.p.x+dx, ny=S.p.y+dy;
+  if(nx<0||ny<0||nx>=MW||ny>=MH) return;
+  const m=monAt(nx,ny);
+  if(m){ if(m.friendly) return talkNPC(m); return playerAttack(m); }
+  const t=S.map[ny][nx];
+  if(t==='#'){ return; }
+  S.p.x=nx; S.p.y=ny;
+  // auto pickup gold; note items
+  const it=itemAt(nx,ny);
+  if(it){ if(it.gold){ S.p.gold+=it.gold; msg('You pick up '+it.gold+' gold.','warn'); S.items=S.items.filter(z=>z!==it); }
+    else if(it.orb){ grabOrb(it); }
+    else { msg('You see here: '+itemName(it.item)+'. ('+'·'+' to grab)','dim'); } }
+  endTurn();
+}
+function centerAction(){
+  const it=itemAt(S.p.x,S.p.y);
+  if(it && it.item){ pickupHere(it); return; }
+  if(it && it.orb){ grabOrb(it); return; }
+  const t=S.map[S.p.y][S.p.x];
+  if(t==='_'){ return altarMenu(); }
+  if(t==='>'||t==='<'){ return useStairs(); }
+  // search/wait
+  msg('You wait.','dim'); endTurn();
+}
+function pickupHere(it){
+  addInv(it.item); msg('You pick up '+itemName(it.item)+'.','good'); S.items=S.items.filter(z=>z!==it); endTurn();
+}
+function grabOrb(it){
+  S.items=S.items.filter(z=>z!==it); S.orb=true;
+  msg('You seize the Orb of the Ancients! Its light is blinding.','warn');
+  victory();
+}
+function playerAttack(m){
+  const unaware = m.asleep; m.asleep=false;
+  const hitC=clamp(55+(S.p.acc-m.def)*6,5,95);
+  if(!chance(hitC)){ msg('You miss the '+m.name+'.','dim'); return endTurn(); }
+  let dmg=dmgRoll(); let crit=false;
+  if(chance(S.p.crit)){ dmg=Math.floor(dmg*2); crit=true; }
+  if(hasPower('backstab') && unaware){ dmg=Math.floor(dmg*2.5); crit=true; }
+  m.hp-=dmg;
+  msg((crit?(unaware&&hasPower('backstab')?'BACKSTAB! ':'CRITICAL! '):'')+'You hit the '+m.name+' for '+dmg+'.', crit?'good':'');
+  if(hasMut('venom') && m.hp>0){ m.venom=(m.venom||0)+3; }
+  if(S.p.weapon && S.p.weapon.lifesteal && S.p.hp<S.p.maxhp){ const h=Math.max(1,Math.floor(dmg*0.25)); heal(h); }
+  if(m.hp<=0){ killMonster(m); }
+  else if(hasPower('cleave') && chance(35)){ // carry into a second adjacent foe
+    const o=S.mons.find(z=>z!==m && z.hp>0 && Math.abs(z.x-S.p.x)<=1 && Math.abs(z.y-S.p.y)<=1);
+    if(o){ const d2=dmgRoll(); o.hp-=d2; o.asleep=false; msg('Your blow cleaves into the '+o.name+' for '+d2+'!','good'); if(o.hp<=0)killMonster(o); }
+  }
+  endTurn();
+}
+function killMonster(m){
+  msg('The '+m.name+' dies.', 'good');
+  S.mons=S.mons.filter(z=>z!==m);
+  if(S.quests && S.quests.rats && m.id==='rat' && !S.quests.rats.turned) S.quests.rats.count++;
+  if(chance(28)) dropItem(mkCorpse(m.id),m.x,m.y);
+  if(m.boss){ msg('The ANCIENT WYRM collapses with a world-shaking roar!','warn'); }
+  if(hasPower('second_wind')){ const h=Math.floor(S.p.maxhp*0.25); if(S.p.hp<S.p.maxhp){ heal(h); msg('Second Wind surges through you. +'+h+' HP','good'); } }
+  if(hasPower('shadowstep') && chance(25)){ teleport(); msg('You melt into the shadows.','sys'); }
+  gainXP(m.xp);
+}
+function gainXP(n){
+  const p=S.p; p.xp+=Math.round(n*raceOf().xp);
+  while(p.xp>=p.xpNext){ p.xp-=p.xpNext; p.level++; p.xpNext=Math.floor(p.xpNext*1.5+15);
+    const oldhp=p.maxhp,oldmp=p.maxmp; recalc(); p.hp+=Math.max(0,p.maxhp-oldhp); p.mp+=Math.max(0,p.maxmp-oldmp);
+    p.hp=p.maxhp; // full heal on level
+    msg('Welcome to level '+p.level+'! You feel renewed.','good');
+    // class powers at milestones
+    (POWERS[p.cls]||[]).forEach(pw=>{ if(p.level>=pw.lvl && !p.powers.includes(pw.id)) applyPower(pw.id); });
+    // a talent pick every few levels
+    if(p.level%TALENT_LEVELS===0) p.pendingTalents++;
+  }
+}
+
+/* ------------------------------- TOWN / NPCs ----------------------------- */
+let _svc=[];
+function svc(label,cost,disabled,fn){ _svc.push(fn); const i=_svc.length-1;
+  return `<button class="opt" ${disabled?'disabled style="opacity:.4"':''} onclick="${disabled?'':'svcDo('+i+')'}"><b>${label}</b> <span class="tag">${cost}</span></button>`; }
+function svcDo(i){ const f=_svc[i]; if(f) f(); }
+function talkNPC(m){
+  S.mode='menu';
+  switch(m.npc){ case 'elder':return elderScreen(); case 'healer':return healerScreen();
+    case 'shop':return merchantScreen(); case 'sage':return sageScreen(); case 'inn':return innScreen();
+    default: hideScreen(); render(); }
+}
+function elderScreen(){
+  S.mode='menu'; _svc=[]; const q=S.quests;
+  let body='<h1 style="font-size:20px">ELDER MARO</h1>';
+  body+='<p style="font-size:13px;color:var(--ink);line-height:1.5">"Hollowreach is dying. The <b>Orb of the Ancients</b> was dragged down into the Abyss, and without it the wards fail and Chaos rots us all. Descend the ten levels, reclaim the Orb, and you\'ll be a legend here."</p>';
+  body+='<div class="statline"><span>Main quest</span><b>'+(S.won?'COMPLETE ✓':'Reclaim the Orb (DLvl '+WIN_DEPTH+')')+'</b></div>';
+  if(!q.rats.turned){
+    if(q.rats.count>=q.rats.need) body+=svc('✓ Turn in — Vermin Cull','+60g & XP',false,()=>{ q.rats.turned=true; S.p.gold+=60; gainXP(40); msg('Elder Maro presses 60 gold into your hand.','good'); elderScreen(); });
+    else body+='<div class="statline"><span>Task — Vermin Cull</span><b>'+q.rats.count+'/'+q.rats.need+' giant rats</b></div>';
+  } else body+='<div class="statline"><span>Vermin Cull</span><b>done ✓</b></div>';
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Farewell</b></button>';
+  showScreen(body);
+}
+function healerScreen(){
+  S.mode='menu'; _svc=[]; const p=S.p;
+  const healCost=Math.max(1,p.maxhp-p.hp);
+  let body='<h1 style="font-size:20px">THE HEALER</h1><div class="sub">your gold: '+p.gold+'</div>';
+  body+=svc('Heal all wounds', healCost+'g', p.hp>=p.maxhp||p.gold<healCost, ()=>{ p.gold-=healCost; heal(999); msg('The Healer\'s hands close your wounds.','good'); healerScreen(); });
+  body+=svc('Cure poison', '15g', !p.poison||p.gold<15, ()=>{ p.gold-=15; p.poison=0; msg('The poison is drawn from your veins.','good'); healerScreen(); });
+  body+=svc('Cleanse a mutation', '150g', !p.mutations.length||p.gold<150, ()=>{ p.gold-=150; const nm=removeMutation(); p.corruption=Math.max(0,p.corruption-CORR_PER_MUT*0.5); msg('The Healer purges the Chaos'+(nm&&nm!==true?' — '+nm+' fades':'')+'.','good'); healerScreen(); });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Leave</b></button>';
+  showScreen(body);
+}
+function merchantScreen(){
+  S.mode='menu'; _svc=[]; const p=S.p;
+  let body='<h1 style="font-size:20px">THE MERCHANT</h1><div class="sub">your gold: '+p.gold+'</div><h2>Buy</h2>';
+  SHOP_STOCK.forEach(id=>{ const base=ITEM_DB[id]; if(!base)return;
+    if(id==='arrow'){ const price=18; body+=svc('arrows ×15','18g',p.gold<price,()=>{ p.gold-=price; addArrows(15); msg('You buy a bundle of arrows.','good'); merchantScreen(); }); return; }
+    const price=Math.max(1,Math.round((base.val||5)*1.4));
+    body+=svc(base.name, price+'g', p.gold<price, ()=>{ p.gold-=price; const it=mkItem(id); addInv(it); setKnown(id,false); msg('You buy '+base.name+'.','good'); merchantScreen(); }); });
+  body+='<h2>Sell</h2>';
+  if(!p.inv.length) body+='<p style="color:var(--dim)">Nothing to sell.</p>';
+  p.inv.forEach((it)=>{ const v=Math.max(1,Math.floor((it.val||2)/2)); body+=svc('Sell '+itemName(it), '+'+v+'g', false, ()=>{ p.gold+=v; it.qty=(it.qty||1)-1; if(it.qty<=0){const ix=p.inv.indexOf(it);if(ix>=0)p.inv.splice(ix,1);} msg('Sold for '+v+' gold.','sys'); merchantScreen(); }); });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Leave</b></button>';
+  showScreen(body);
+}
+function sageScreen(){
+  S.mode='menu'; _svc=[]; const p=S.p; const q=S.quests.arti;
+  const unided=p.inv.filter(x=>(x.kind==='potion'||x.kind==='scroll')&&!isKnown(x));
+  let body='<h1 style="font-size:20px">THE SAGE</h1><div class="sub">your gold: '+p.gold+'</div>';
+  body+='<p style="font-size:12px;color:var(--dim)">"Knowledge has a price, friend."</p>';
+  body+=svc('Identify everything in your pack', '40g', !unided.length||p.gold<40, ()=>{ p.gold-=40; p.inv.forEach(x=>{ if(x.kind==='potion'||x.kind==='scroll') setKnown(x.id,false); }); msg('The Sage names every item you carry.','sys'); sageScreen(); });
+  const hasArti=p.inv.some(x=>x.artifact)||(p.weapon&&p.weapon.artifact)||(p.armor&&p.armor.artifact);
+  if(!q.turned){ if(hasArti) body+=svc('Show the Sage an artifact','+120g & XP',false,()=>{ q.turned=true; p.gold+=120; gainXP(80); msg('The Sage studies your artifact in awe. +120 gold','good'); sageScreen(); });
+    else body+='<div class="statline"><span>Sage\'s request</span><b>bring an artifact</b></div>'; }
+  else body+='<div class="statline"><span>Sage\'s request</span><b>done ✓</b></div>';
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Leave</b></button>';
+  showScreen(body);
+}
+function innScreen(){
+  S.mode='menu'; _svc=[]; const p=S.p;
+  let body='<h1 style="font-size:20px">THE INNKEEPER</h1>';
+  body+='<p style="font-size:13px;color:var(--ink)">"Beds are warm, the door is barred. Rest easy, delver."</p>';
+  body+=svc('Rest the night — heal & feed', 'free', p.hp>=p.maxhp&&p.mp>=p.maxmp&&p.food>=p.foodMax, ()=>{ p.hp=p.maxhp; p.mp=p.maxmp; p.food=p.foodMax; msg('You sleep soundly and wake fully restored.','good'); innScreen(); });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Leave</b></button>';
+  showScreen(body);
+}
+function introStory(){
+  S.mode='menu';
+  showScreen(`<div class="center"><h1>HOLLOWREACH</h1><div class="sub">the last village above the Abyss</div></div>
+   <p style="font-size:13.5px;line-height:1.55;color:var(--ink)">You reach <b>Hollowreach</b> as its wards gutter like dying candles. Elder Maro meets you at the gate: the <b>Orb of the Ancients</b> has been dragged down into the Abyss below, and without it Chaos will swallow the village whole.</p>
+   <p style="font-size:13.5px;line-height:1.55;color:var(--dim)">Trade with the villagers, take on their tasks, then find the stairs <b>(&gt;)</b> and descend into the dark. Ten levels down waits the Orb — and the <b>Ancient Wyrm</b> that guards it.</p>
+   <button class="opt" style="border-color:var(--gold);background:#23210f" onclick="hideScreen();render()"><b>▸ Enter Hollowreach</b></button>`);
+}
+
+/* --------------------------------- STAIRS -------------------------------- */
+function useStairs(){
+  const t=S.map[S.p.y][S.p.x];
+  if(t==='>'){
+    if(S.town){ buildLevel(1,false); msg('You descend into the Abyss. Level 1.','sys'); }
+    else { buildLevel(S.depth+1,false); msg('You descend to dungeon level '+S.depth+'.','sys'); }
+    render();
+  } else if(t==='<'){
+    if(S.depth<=1){ buildTown(); msg('You climb back into the daylight of Hollowreach.','sys'); render(); }
+    else { buildLevel(S.depth-1,true); msg('You climb to dungeon level '+S.depth+'.','sys'); render(); }
+  } else { msg('There are no stairs here.','dim'); }
+}
+
+/* --------------------------------- MAGIC --------------------------------- */
+/* --------------------------------- RANGED -------------------------------- */
+function addArrows(n){ const a=mkItem('arrow'); a.qty=n; addInv(a); }
+function arrowCount(){ const a=S.p.inv.find(x=>x.id==='arrow'); return a?(a.qty||0):0; }
+function useArrow(){ const a=S.p.inv.find(x=>x.id==='arrow'); if(!a||a.qty<=0) return false; a.qty--; if(a.qty<=0){ const i=S.p.inv.indexOf(a); if(i>=0)S.p.inv.splice(i,1); } return true; }
+function fire(){
+  if(!S||S.over||S.mode!=='play') return;
+  const p=S.p, bow=p.ranged;
+  if(!bow){ msg('You have no bow readied. Find one and ready it from your pack.','dim'); return; }
+  if(arrowCount()<=0){ msg('You are out of arrows!','bad'); return; }
+  let best=null,bd=1e9;
+  for(const m of S.mons){ if(m.friendly||!S.vis[m.y][m.x]) continue;
+    const d=Math.max(Math.abs(m.x-p.x),Math.abs(m.y-p.y));
+    if(d<=bow.range && d<bd){ bd=d; best=m; } }
+  if(!best){ msg('No target within bowshot.','dim'); return; }
+  useArrow(); best.asleep=false;
+  const racc=p.attr.dex+(bow.acc||0)+(bow.ench||0)+Math.floor(p.level/2)+(p.bonAcc||0)+(hasPower('keen_eye')?1:0);
+  const hitC=clamp(55+(racc-best.def)*6,5,95);
+  if(!chance(hitC)){ msg('Your arrow whistles past the '+best.name+'.','dim'); return endTurn(); }
+  let dmg=roll(bow.dmg)+(bow.ench||0)+Math.floor((p.attr.dex-10)/2); let crit=false;
+  if(chance(p.crit)){ dmg=Math.floor(dmg*1.8); crit=true; }
+  best.hp-=dmg;
+  msg((crit?'CRITICAL SHOT! ':'')+'Your arrow strikes the '+best.name+' for '+dmg+'.', crit?'good':'');
+  if(best.hp<=0) killMonster(best);
+  endTurn();
+}
+
+function nearestVisibleMonster(){
+  let best=null,bd=1e9;
+  for(const m of S.mons){ if(m.friendly||!S.vis[m.y][m.x]) continue; const d=Math.abs(m.x-S.p.x)+Math.abs(m.y-S.p.y); if(d<bd){bd=d;best=m;} }
+  return best;
+}
+function spellBolt(dmgspec,critB,kind){
+  const m=nearestVisibleMonster(); if(!m){ msg('No target in sight.','dim'); return false; }
+  let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2)+(S.p.spellPow||0); m.asleep=false; m.hp-=dmg;
+  msg('A bolt of '+kind+' strikes the '+m.name+' for '+dmg+'.','sys');
+  if(m.hp<=0) killMonster(m);
+  return true;
+}
+function spellFireball(dmgspec){
+  const m=nearestVisibleMonster(); if(!m){ msg('No target in sight.','dim'); return false; }
+  const cx=m.x,cy=m.y; let hit=0;
+  for(const z of S.mons.slice()){ if(!z.friendly && Math.abs(z.x-cx)<=1&&Math.abs(z.y-cy)<=1){ let dmg=roll(dmgspec)+Math.floor((S.p.attr.wil-10)/2)+(S.p.spellPow||0); z.asleep=false; z.hp-=dmg; hit++; if(z.hp<=0)killMonster(z);} }
+  // self damage if adjacent
+  if(Math.abs(S.p.x-cx)<=1&&Math.abs(S.p.y-cy)<=1){ let d=roll('1d6'); if(hasFireRes())d=Math.ceil(d/2); S.p.hp-=d; msg('The blast singes you for '+d+'!','bad'); }
+  msg('Fireball erupts! '+hit+' foe'+(hit===1?'':'s')+' caught in the flames.','sys');
+  return true;
+}
+function scrollFlame(){ if(spellFireball('2d6')) {} else msg('The scroll fizzles — no target.','dim'); }
+function teleport(){ const c=randFloor(false); if(c){ S.p.x=c.x; S.p.y=c.y; computeFOV(); } }
+function revealMap(){ for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){ if(S.map[y][x]!=='#'||hasFloorNeighbor(x,y)) S.seen[y][x]=true; } }
+function hasFloorNeighbor(x,y){ for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){ const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=MW||ny>=MH)continue; if(S.map[ny][nx]!=='#')return true; } return false; }
+function litRoom(){ const R=Math.max(S.p.light,6); for(let y=S.p.y-R;y<=S.p.y+R;y++)for(let x=S.p.x-R;x<=S.p.x+R;x++){ if(x<0||y<0||x>=MW||y>=MH)continue; if(los(S.p.x,S.p.y,x,y)){S.seen[y][x]=true;} } }
+function heal(n){ S.p.hp=clamp(S.p.hp+n,0,S.p.maxhp); }
+
+/* --------------------------------- REST ---------------------------------- */
+function restCmd(){
+  if(nearestVisibleMonster()){ msg('Not while enemies are near!','bad'); return; }
+  if(S.p.hp>=S.p.maxhp && S.p.mp>=S.p.maxmp){ msg('You are already fully rested.','dim'); return; }
+  let n=0;
+  while(n<120 && (S.p.hp<S.p.maxhp||S.p.mp<S.p.maxmp)){ upkeep(); n++; if(nearestVisibleMonster())break; if(S.p.food<=0)break; }
+  msg('You rest for a while.','dim'); endTurn(true);
+}
+
+/* ------------------------------- TURN LOOP ------------------------------- */
+function endTurn(noMonsters){
+  if(S.over) return;
+  if(!noMonsters) monstersAct();
+  upkeep();
+  S.turn++;
+  if(S.p.hp<=0){ return death(); }
+  computeFOV(); render();
+  if(!S.over && S.p.pendingTalents>0) openTalents();
+}
+function upkeep(){
+  const p=S.p, R=raceOf();
+  // background corruption seeps from the deep
+  if(S.depth>0) addCorruption(S.depth*0.03);
+  // teleportitis mutation
+  if(hasMut('teleport') && chance(2)){ teleport(); computeFOV(); msg('Teleportitis warps you elsewhere!','warn'); }
+  // hunger (faster with the Burning Gut mutation)
+  const foodMul = (hasMut('hunger')?1.6:1) * (p.level>8?1.3:1);
+  p.food-=Math.max(1,Math.round(R.food*foodMul));
+  if(p.food<=0){ p.food=0; p.hp-=1; if(S.turn%3===0)msg('You are starving!','bad'); }
+  // prayer cooldown
+  if(p.prayTimer>0) p.prayTimer--;
+  // poison
+  if(p.poison>0){ p.poison--; p.hp-=1; if(S.turn%2===0)msg('The poison burns. (-1 HP)','bad'); }
+  // regen (Toughness + Trollblood/Fast-Healer talents & race)
+  let regenRate=16-Math.floor(p.attr.tou/2)-(R.regen||0)*4-(p.bonRegen||0)*3-(hasMut('mregen')?6:0);
+  regenRate=Math.max(3,regenRate);
+  if(p.hp<p.maxhp && p.food>0){ if(++p.regenTick>=regenRate){ p.regenTick=0; p.hp=clamp(p.hp+1,0,p.maxhp); } }
+  const mpRate=Math.max(2, 12-Math.floor(p.attr.wil/2)-(p.bonRegenMP||0)*3);
+  if(p.mp<p.maxmp){ if(++p.mpTick>=mpRate){ p.mpTick=0; p.mp=clamp(p.mp+1,0,p.maxmp); } }
+}
+function monstersAct(){
+  for(const m of S.mons.slice()){
+    if(m.hp<=0||m.friendly) continue;
+    if(m.venom>0){ m.venom--; m.hp-=2; if(m.hp<=0){ killMonster(m); continue; } }
+    if(m.spd==='slow'){ m.slowtick=!m.slowtick; if(m.slowtick) continue; }
+    monsterStep(m);
+    if(m.spd==='fast' && m.hp>0 && !S.over) monsterStep(m);
+    if(S.over) return;
+  }
+}
+function monsterStep(m){
+  const p=S.p;
+  const dist=Math.max(Math.abs(m.x-p.x),Math.abs(m.y-p.y));
+  // waking
+  if(m.asleep){
+    const wake=m.boss?99:(m.id==='bat'?4:6) - (classOf().stealth||0);
+    if(dist<=Math.max(1,wake) && S.vis[m.y][m.x]) m.asleep=false; else { if(m.regen&&m.hp<m.maxhp)m.hp=clamp(m.hp+m.regen,0,m.maxhp); return; }
+  }
+  // regen for trolls etc.
+  if(m.regen && m.hp<m.maxhp) m.hp=clamp(m.hp+m.regen,0,m.maxhp);
+  // adjacent -> attack (or breath)
+  if(dist<=1){ return monsterAttack(m); }
+  // breath weapon at range if in LOS
+  if(m.breath && dist<=4 && los(m.x,m.y,p.x,p.y) && chance(35)){ return monsterBreath(m); }
+  // erratic movement (bats)
+  let dx,dy;
+  if(m.erratic && chance(45)){ dx=rng(-1,1); dy=rng(-1,1); }
+  else { dx=sign(p.x-m.x); dy=sign(p.y-m.y); }
+  tryMonMove(m,dx,dy);
+}
+function tryMonMove(m,dx,dy){
+  const opts=[[dx,dy],[dx,0],[0,dy]];
+  if(dx===0) opts.push([1,dy],[-1,dy]); if(dy===0) opts.push([dx,1],[dx,-1]);
+  for(const [ox,oy] of opts){ if(ox===0&&oy===0)continue;
+    const nx=m.x+ox,ny=m.y+oy;
+    if(nx<0||ny<0||nx>=MW||ny>=MH)continue;
+    if(S.map[ny][nx]==='#')continue;
+    if(nx===S.p.x&&ny===S.p.y){ return monsterAttack(m); }
+    if(monAt(nx,ny))continue;
+    m.x=nx;m.y=ny; return;
+  }
+}
+function monsterAttack(m){
+  const p=S.p;
+  if(p.dodge && chance(p.dodge)){ if(S.vis[m.y][m.x])msg('You dodge the '+m.name+'\'s attack.','dim'); return; }
+  const hitC=clamp(50+(m.acc-p.ac)*6,5,95);
+  if(!chance(hitC)){ if(S.vis[m.y][m.x])msg('The '+m.name+' misses you.','dim'); return; }
+  let dmg=roll(m.dmg);
+  p.hp-=dmg;
+  let extra='';
+  if(m.poison){ const amt=p.poisonRes?Math.ceil(m.poison/2):m.poison; p.poison=(p.poison||0)+amt; extra=' You are poisoned!'; }
+  if(m.drain && chance(40)){ p.xp=Math.max(0,p.xp-m.drain*4); extra+=' It drains your vigour!'; }
+  if(m.corrupt){ addCorruption(m.corrupt); extra+=' You feel the cold touch of Chaos.'; }
+  msg('The '+m.name+' hits you for '+dmg+'.'+extra,'bad');
+  if(p.hp<=0){ death(); }
+}
+function monsterBreath(m){
+  const p=S.p; let dmg=roll(m.breath); if(hasFireRes())dmg=Math.ceil(dmg/2); p.hp-=dmg;
+  msg('The '+m.name+' breathes fire — '+dmg+' damage!'+(hasFireRes()?' (resisted)':''),'bad');
+  if(p.hp<=0) death();
+}
+
+/* ------------------------------- END STATES ------------------------------ */
+function death(){
+  if(S.over) return; S.over=true; S.p.hp=0;
+  const score=calcScore();
+  recordScore(score);
+  showGameOver(false,score);
+}
+function victory(){
+  if(S.over) return; S.over=true; S.won=true;
+  const score=calcScore()+1000;
+  recordScore(score);
+  showGameOver(true,score);
+}
+function calcScore(){ const p=S.p; return p.gold + p.level*100 + S.depth*150 + (S.won?1000:0); }
+function getHi(){ try{ return JSON.parse(localStorage.getItem(HISCORE_KEY))||{score:0,depth:0,won:false}; }catch(e){ return {score:0,depth:0,won:false}; } }
+function recordScore(score){ const hi=getHi(); if(score>hi.score){ try{ localStorage.setItem(HISCORE_KEY, JSON.stringify({score,depth:S.depth,won:S.won,name:classOf().name,date:Date.now()})); }catch(e){} } }
+
+/* ------------------------------- MESSAGES -------------------------------- */
+function msg(text,cls){ S.log.push({text,cls:cls||''}); if(S.log.length>40)S.log.shift(); }
+
+/* ============================== RENDERING ================================= */
+const $=(id)=>document.getElementById(id);
+function itemName(it){
+  let n=it.name;
+  if((it.kind==='potion'||it.kind==='scroll') && !isKnown(it)){
+    n = it.kind==='potion' ? (((S.appear&&S.appear.potions[it.id])||'strange')+' potion')
+                           : ('scroll labeled '+((S.appear&&S.appear.scrolls[it.id])||'????'));
+  } else if(it.ench && !it.artifact){ n='+'+it.ench+' '+n; }
+  if(it.qty>1)n=it.qty+'× '+n;
+  return n;
+}
+function identifyOne(){
+  const it=S.p.inv.find(x=>(x.kind==='potion'||x.kind==='scroll')&&!isKnown(x));
+  if(!it){ msg('Nothing in your pack needs identifying.','dim'); return; }
+  setKnown(it.id,false); msg('You identify it: '+itemName(it)+'.','sys');
+}
+
+function sizeMap(){
+  const wrap=$('mapwrap'); const w=wrap.clientWidth, h=wrap.clientHeight;
+  // pick viewport that fits; keep odd dims so player centers
+  COLS=21; ROWS=15;
+  let cell=Math.floor(Math.min(w/COLS, h/ROWS));
+  cell=clamp(cell,10,30);
+  const map=$('map');
+  map.style.gridTemplateColumns='repeat('+COLS+','+cell+'px)';
+  map.style.gridTemplateRows='repeat('+ROWS+','+cell+'px)';
+  map.style.fontSize=Math.floor(cell*0.86)+'px';
+  map._cell=cell;
+}
+function render(){
+  if(!S||!S.p) return;
+  renderHUD();
+  renderMap();
+  renderLog();
+  // center button label
+  const here=itemAt(S.p.x,S.p.y); const t=S.map[S.p.y][S.p.x];
+  $('centerLbl').textContent = here&&here.item?'grab' : here&&here.orb?'grab' : (t==='_'?'pray':t==='>'?'down':t==='<'?'up':'wait');
+  $('stairBtn').disabled = !(t==='>'||t==='<');
+  $('castBtn').disabled = !(classOf().caster || S.p.spells.length);
+  const ar=arrowCount();
+  $('shootBtn').disabled = !S.p.ranged || ar<=0;
+  $('shootLbl').textContent = S.p.ranged ? ('⤙'+ar) : 'f';
+}
+function renderHUD(){
+  const p=S.p;
+  $('hName').textContent=p.name+' the '+raceOf().name+' '+classOf().name;
+  $('hDepth').textContent=S.town?'Town':S.depth; $('hClvl').textContent=p.level; $('hGold').textContent=p.gold;
+  const corr=Math.floor(p.corruption||0);
+  const cp=$('hCorrPill'); cp.style.display=corr>0?'':'none';
+  if(corr>0){ $('hCorr').textContent=corr; const toNext=CORR_PER_MUT-(corr%CORR_PER_MUT); cp.title='mutation in ~'+toNext; cp.style.color=(corr%CORR_PER_MUT)>=70?'var(--red)':''; }
+  setBar('hp',p.hp,p.maxhp,'HP '+Math.max(0,p.hp)+'/'+p.maxhp);
+  setBar('mp',p.mp,p.maxmp,'MP '+p.mp+'/'+p.maxmp);
+  setBar('xp',p.xp,p.xpNext,'XP '+Math.floor(p.xp/p.xpNext*100)+'%');
+  setBar('food',p.food,p.foodMax, foodWord());
+}
+function foodWord(){ const f=S.p.food/S.p.foodMax; return f<=0?'STARVING':f<.12?'Hungry':f<.45?'Peckish':f<.85?'Fed':'Full'; }
+function setBar(id,v,max,txt){ const pc=max>0?clamp(v/max*100,0,100):0; $(id+'Bar').style.width=pc+'%'; $(id+'Txt').textContent=txt; }
+function glyphFor(x,y){
+  if(x===S.p.x&&y===S.p.y) return {ch:'@',c:'var(--white)'};
+  const m=monAt(x,y); if(m&&S.vis[y][x]) return {ch:m.g,c:m.c};
+  const it=itemAt(x,y); if(it&&S.vis[y][x]) return {ch:it.g||'?',c:COL[it.g]||'var(--white)'};
+  const t=S.map[y][x];
+  return {ch:t,c:COL[t]||'var(--floor)'};
+}
+function renderMap(){
+  const map=$('map'); if(!map._cell) sizeMap();
+  const halfC=COLS>>1, halfR=ROWS>>1;
+  const ox=clamp(S.p.x-halfC,0,MW-COLS), oy=clamp(S.p.y-halfR,0,MH-ROWS);
+  let html='';
+  for(let sy=0;sy<ROWS;sy++){
+    for(let sx=0;sx<COLS;sx++){
+      const x=ox+sx,y=oy+sy;
+      if(x<0||y<0||x>=MW||y>=MH){ html+='<span></span>'; continue; }
+      if(!S.seen[y][x]){ html+='<span></span>'; continue; }
+      const g=glyphFor(x,y);
+      if(S.vis[y][x]){ html+='<span style="color:'+g.c+'">'+esc(g.ch)+'</span>'; }
+      else { // remembered: terrain only, dimmed
+        const t=S.map[y][x]; const ch=(t==='#'||t==='.'||t==='+'||t==='>'||t==='<')?t:'.';
+        html+='<span style="color:#33333e">'+esc(ch)+'</span>'; }
+    }
+  }
+  map.innerHTML=html;
+}
+function esc(c){ return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c; }
+function renderLog(){
+  const box=$('log'); let html='';
+  const last=S.log.slice(-4).reverse();
+  for(const l of last){ html+='<div class="m-'+(l.cls||'dim')+'">'+l.text+'</div>'; }
+  box.innerHTML=html;
+}
+
+/* ============================== OVERLAY SCREENS =========================== */
+function showScreen(html){ $('screenBody').innerHTML=html; $('screen').classList.add('show'); }
+function hideScreen(){ $('screen').classList.remove('show'); if(S&&!S.over)S.mode='play'; }
+
+/* ---- title ---- */
+function titleScreen(){
+  S=newState(); S.mode='menu';
+  const hi=getHi();
+  showScreen(`
+    <div class="center">
+      <h1>ABYSSAL DOMAINS</h1>
+      <div class="sub">a pocket roguelike of the ancient deep</div>
+    </div>
+    <pre style="color:var(--dim);font-size:11px;line-height:1.15;text-align:center;margin:6px 0">      .-=≡≡=-.
+    /  __   __ \\
+   |  (oo) (oo) |   the dark is patient,
+    \\   \\__/   /    and it is deep.
+     '-.____.-'</pre>
+    ${hi.score?`<div class="center" style="color:var(--gold);font-size:12px;margin-bottom:6px">★ best: ${hi.score} pts · DLvl ${hi.depth}${hi.won?' · ESCAPED':''}</div>`:''}
+    <button class="opt" onclick="startCreate()"><b>▸ DESCEND</b> — begin a new delve<span class="d">Choose a hero and enter the dungeon. Death is permanent.</span></button>
+    <button class="opt" onclick="howto()"><b>?</b> How to play<span class="d">Controls, symbols, and survival tips.</span></button>
+    <div class="hint">Reach the Sanctum at depth ${WIN_DEPTH}, slay the Ancient Wyrm, and claim the Orb.</div>
+  `);
+}
+function howto(){
+  showScreen(`
+    <h2>HOW TO PLAY</h2>
+    <p style="font-size:13px;color:var(--ink);line-height:1.5">
+      Move with the <b>3×3 pad</b> (corners = diagonals). The <b>centre</b> button waits, grabs an item, or takes stairs. <b>Bump a monster</b> to attack it.<br><br>
+      The <b>Shoot</b> button (key <b>f</b>) looses an arrow at the nearest foe in sight — ready a <b>bow</b> and carry <b>arrows</b>. The Ranger starts with both; anyone can use a bow they find or buy.<br><br>
+      On a keyboard: <b>arrows / WASD / hjkl+yubn</b> to move, <b>g</b> grab, <b>f</b> shoot, <b>i</b> items, <b>z</b> cast, <b>R</b> rest, <b>&gt;</b>/<b>&lt;</b> stairs.
+    </p>
+    <h2>SYMBOLS</h2>
+    <div class="glyphkey">
+      <b style="color:var(--white)">@</b> you &nbsp; <b style="color:var(--wall)">#</b> wall &nbsp; <b>.</b> floor &nbsp; <b style="color:var(--cyan)">&gt;</b> stairs down &nbsp; <b style="color:var(--cyan)">&lt;</b> up<br>
+      <b style="color:var(--red)">!</b> potion &nbsp; <b style="color:var(--white)">?</b> scroll &nbsp; <b style="color:var(--cyan)">/</b> weapon &nbsp; <b style="color:var(--blue)">[</b> armor &nbsp; <b style="color:var(--food)">%</b> food &nbsp; <b style="color:var(--gold)">$</b> gold &nbsp; <b style="color:var(--mag)">*</b> the Orb<br>
+      letters are monsters — the rarer the letter, the deadlier.
+    </div>
+    <h2>SURVIVAL</h2>
+    <p style="font-size:13px;color:var(--dim);line-height:1.5">
+      Rest to heal when safe, but resting burns food. Eat rations before you starve. Descend when ready — you can climb back up, but the only way truly out is the Orb.<br><br>
+      Gain levels for <b>class powers</b> and to pick <b>talents</b>. Beware <b>Chaos</b>: the deeper you delve and the more chaos-touched horrors strike you, the higher your <b>corruption</b> climbs — and each threshold warps your flesh with a <b>mutation</b>, gift or curse.
+    </p>
+    <button class="opt" onclick="titleScreen()"><b>↩ Back</b></button>
+  `);
+}
+
+/* ---- character creation ---- */
+let _cre={race:'human',cls:'fighter'};
+function startCreate(){ _cre={race:'human',cls:'fighter'}; creScreen(); }
+function creScreen(){
+  const R=RACES.find(r=>r.id===_cre.race), C=CLASSES.find(c=>c.id===_cre.cls);
+  showScreen(`
+    <h1 style="font-size:20px">CREATE YOUR HERO</h1>
+    <h2>Race</h2>
+    ${RACES.map(r=>`<button class="opt ${r.id===_cre.race?'sel':''}" onclick="_cre.race='${r.id}';creScreen()"><b>${r.name}</b> <span class="tag">${statTag(r.mod)}</span><span class="d">${r.desc}</span></button>`).join('')}
+    <h2>Class</h2>
+    ${CLASSES.map(c=>`<button class="opt ${c.id===_cre.cls?'sel':''}" onclick="_cre.cls='${c.id}';creScreen()"><b>${c.name}</b> <span class="tag">${c.caster?'caster':'martial'}</span><span class="d">${c.desc}</span></button>`).join('')}
+    <button class="opt" style="border-color:var(--gold);background:#23210f" onclick="beginGame()"><b>▸ ENTER THE DUNGEON as the ${R.name} ${C.name}</b></button>
+    <button class="opt" onclick="titleScreen()"><b>↩ Back</b></button>
+  `);
+}
+function statTag(mod){ const parts=[]; for(const k in mod){ if(mod[k]) parts.push((mod[k]>0?'+':'')+mod[k]+' '+k.toUpperCase()); } return parts.join(' '); }
+function beginGame(){
+  S=newState(); S.mode='play';
+  createPlayer(_cre.race,_cre.cls);
+  assignAppearances();
+  S.quests={ rats:{count:0,need:8,turned:false}, arti:{turned:false} };
+  buildTown();
+  S.log=[]; msg('You arrive at Hollowreach, the last village above the Abyss.','sys');
+  sizeMap(); render();
+  introStory();
+}
+
+/* ---- inventory ---- */
+function openInventory(){ S.mode='menu'; invScreen(); }
+function invScreen(){
+  const p=S.p; const groups={};
+  p.inv.forEach((it,i)=>{ (groups[it.kind]=groups[it.kind]||[]).push({it,i}); });
+  const order=['potion','scroll','food','weapon','bow','ammo','armor'];
+  let body='<h1 style="font-size:20px">INVENTORY</h1>';
+  body+=`<div class="grid2" style="margin-bottom:8px">
+    <div class="statline"><span>Weapon</span><b>${p.weapon?itemName(p.weapon):'— bare hands —'}</b></div>
+    <div class="statline"><span>Armor</span><b>${p.armor?itemName(p.armor):'— none —'}</b></div></div>`;
+  if(!p.inv.length) body+='<p style="color:var(--dim)">Your pack is empty.</p>';
+  order.forEach(k=>{ if(!groups[k])return; body+='<h2>'+k+'s</h2>';
+    groups[k].forEach(({it,i})=>{ body+=`<button class="opt" onclick="itemMenu(${i})"><span class="invitem"><span><b>${it.g||'?'}</b> ${itemName(it)}</span><span class="q">${it.qty>1?'×'+it.qty:''}</span></span></button>`; });
+  });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Close</b></button>';
+  showScreen(body);
+}
+function itemMenu(i){
+  const it=S.p.inv[i]; if(!it) return invScreen();
+  let body='<h1 style="font-size:18px">'+itemName(it)+'</h1>';
+  body+='<p style="color:var(--dim);font-size:12px">'+itemDesc(it)+'</p>';
+  if(it.kind==='weapon') body+=`<button class="opt" onclick="equipItem(${i})"><b>⚔ Wield</b></button>`;
+  else if(it.kind==='armor') body+=`<button class="opt" onclick="equipItem(${i})"><b>🛡 Wear</b></button>`;
+  else if(it.kind==='bow') body+=`<button class="opt" onclick="equipItem(${i})"><b>🏹 Ready bow</b></button>`;
+  else if(it.kind==='ammo') {}
+  else body+=`<button class="opt" onclick="useItem(${i})"><b>✛ ${it.kind==='food'?'Eat':'Use'}</b></button>`;
+  body+=`<button class="opt" onclick="dropItem2(${i})"><b>▾ Drop</b></button>`;
+  body+='<button class="opt" onclick="invScreen()"><b>↩ Back</b></button>';
+  showScreen(body);
+}
+function itemDesc(it){
+  if(it.kind==='weapon') return 'Damage '+it.dmg+(it.acc?' · acc '+(it.acc>0?'+':'')+it.acc:'')+(it.ench?' · enchanted +'+it.ench:'');
+  if(it.kind==='bow') return 'Ranged '+it.dmg+' · range '+it.range+' · acc +'+((it.acc||0)+(it.ench||0))+'. Needs arrows.';
+  if(it.kind==='ammo') return 'Ammunition for bows. You have '+arrowCount()+'.';
+  if(it.kind==='armor') return 'Armor +'+((it.ac||0)+(it.ench||0));
+  if(it.kind==='food') return 'Restores about '+it.sat+' food.';
+  if(it.bad) return 'An unidentified, murky brew. Could be anything.';
+  return it.name.replace(/^(potion|scroll) of /,'A $1 that ')+'.';
+}
+function equipItem(i){
+  const it=S.p.inv[i]; if(!it) return invScreen();
+  const slot=it.kind==='bow'?'ranged':it.kind==='weapon'?'weapon':'armor';
+  const verb=slot==='ranged'?'ready':slot==='weapon'?'wield':'wear';
+  const cur=S.p[slot];
+  S.p[slot]=it; S.p.inv.splice(i,1);
+  if(cur) S.p.inv.push(cur);
+  recalc(); msg('You '+verb+' the '+it.name+'.','good');
+  hideScreen(); endTurn();
+}
+function useItem(i){
+  const it=S.p.inv[i]; if(!it) return invScreen();
+  const wasUnknown=(it.kind==='potion'||it.kind==='scroll')&&!isKnown(it);
+  hideScreen();
+  if(it.use) it.use(S.p, it);
+  if(wasUnknown) setKnown(it.id,true);
+  it.qty=(it.qty||1)-1; if(it.qty<=0){ const idx=S.p.inv.indexOf(it); if(idx>=0) S.p.inv.splice(idx,1); }
+  recalc(); endTurn();
+}
+function dropItem2(i){
+  const it=S.p.inv[i]; if(!it) return invScreen();
+  if(itemAt(S.p.x,S.p.y)){ msg('There is already something here.','dim'); return invScreen(); }
+  const one=Object.assign({},it); one.qty=1;
+  if(it.qty>1){ it.qty--; } else S.p.inv.splice(i,1);
+  dropItem(one,S.p.x,S.p.y); msg('You drop the '+it.name+'.','dim');
+  hideScreen(); render();
+}
+
+/* ---- cast ---- */
+function openCast(){
+  if(!S.p.spells.length){ msg('You know no spells.','dim'); return; }
+  S.mode='menu';
+  let body='<h1 style="font-size:20px">CAST A SPELL</h1>';
+  body+='<div class="sub">MP '+S.p.mp+'/'+S.p.maxmp+'</div>';
+  S.p.spells.forEach((id)=>{ const sp=SPELLS[id]; const c=spellCost(id); const ok=S.p.mp>=c;
+    body+=`<button class="opt" ${ok?'':'disabled style=opacity:.4'} onclick="${ok?`doCast('${id}')`:''}"><b>${sp.name}</b> <span class="tag">${c} MP</span><span class="d">${sp.desc}</span></button>`; });
+  body+='<button class="opt" onclick="hideScreen();render()"><b>↩ Back</b></button>';
+  showScreen(body);
+}
+function spellCost(id){ const sp=SPELLS[id]; let c=sp.cost; if(id==='fireball'&&hasPower('pyromancer'))c=Math.max(1,c-3); return c; }
+function doCast(id){
+  const sp=SPELLS[id]; const cost=spellCost(id); if(S.p.mp<cost){ return; }
+  hideScreen();
+  const ok=sp.cast();
+  if(ok!==false){ S.p.mp-=cost; endTurn(); } else { render(); }
+}
+
+/* ---- character sheet ---- */
+function openChar(){
+  S.mode='menu'; const p=S.p;
+  const a=p.attr;
+  showScreen(`
+    <h1 style="font-size:20px">${p.name}</h1>
+    <div class="sub">${raceOf().name} ${classOf().name} · Level ${p.level} · Depth ${S.depth}</div>
+    <div class="grid2">
+      <div class="statline"><span>Strength</span><b>${a.str}</b></div>
+      <div class="statline"><span>Dexterity</span><b>${a.dex}</b></div>
+      <div class="statline"><span>Toughness</span><b>${a.tou}</b></div>
+      <div class="statline"><span>Willpower</span><b>${a.wil}</b></div>
+      <div class="statline"><span>Perception</span><b>${a.per}</b></div>
+      <div class="statline"><span>Accuracy</span><b>+${p.acc}</b></div>
+      <div class="statline"><span>Armor Class</span><b>${p.ac}</b></div>
+      <div class="statline"><span>Crit chance</span><b>${p.crit}%</b></div>
+      <div class="statline"><span>Damage</span><b>${p.weapon?p.weapon.dmg+(p.weapon.ench?'+'+p.weapon.ench:''):'1d3'}</b></div>
+      <div class="statline"><span>Gold</span><b>${p.gold}</b></div>
+    </div>
+    <div class="statline"><span>Dodge</span><b>${p.dodge||0}%</b></div>
+    <div class="statline"><span>Deity</span><b>${p.god}</b></div>
+    <div class="statline"><span>Divine favor</span><b>${Math.floor(p.piety||0)}</b></div>
+    ${p.intrinsics&&p.intrinsics.length?`<div class="statline"><span>Intrinsics</span><b>${p.intrinsics.map(intrinsicName).join(', ')}</b></div>`:''}
+    <div class="statline"><span>Wielding</span><b>${p.weapon?itemName(p.weapon):'bare hands'}</b></div>
+    <div class="statline"><span>Bow</span><b>${p.ranged?itemName(p.ranged)+' ('+arrowCount()+' arrows)':'none'}</b></div>
+    <div class="statline"><span>Wearing</span><b>${p.armor?itemName(p.armor):'nothing'}</b></div>
+    ${p.spells.length?`<div class="statline"><span>Spells</span><b>${p.spells.map(s=>SPELLS[s].name).join(', ')}</b></div>`:''}
+    <h2>Class powers</h2>
+    <div class="glyphkey">${p.powers.length?p.powers.map(id=>{const pw=powerById(id);return pw?'<b>'+pw.name+'</b> — '+pw.desc:'';}).join('<br>'):'<i>none yet</i>'}</div>
+    <h2>Corruption ${Math.floor(p.corruption||0)} <span style="color:var(--dim);font-size:11px">(mutation every ${CORR_PER_MUT})</span></h2>
+    <div class="glyphkey">${p.mutations.length?p.mutations.map(id=>{const m=mutById(id);return '<b style="color:'+(m.good?'var(--green)':'var(--red)')+'">'+m.name+'</b> — '+m.desc;}).join('<br>'):'<i>your flesh is still your own</i>'}</div>
+    <button class="opt" onclick="hideScreen();render()"><b>↩ Close</b></button>
+  `);
+}
+
+/* ---- game over ---- */
+function showGameOver(won,score){
+  S.mode='over';
+  const hi=getHi();
+  const best=score>=hi.score;
+  showScreen(`
+    <div class="center">
+      <h1 style="color:${won?'var(--gold)':'var(--red)'}">${won?'YOU ESCAPED':'YOU DIED'}</h1>
+      <div class="sub">${won?'The Orb is yours. Daylight, at last.':'The dark keeps what it claims.'}</div>
+    </div>
+    <p class="center big">${S.p.name} the ${raceOf().name} ${classOf().name}</p>
+    <p class="center" style="color:var(--dim)">${won?'claimed the Orb of the Ancients':'fell on dungeon level '+S.depth} at character level ${S.p.level}.</p>
+    <div class="grid2" style="margin:10px 0">
+      <div class="statline"><span>Depth reached</span><b>${S.depth}</b></div>
+      <div class="statline"><span>Character level</span><b>${S.p.level}</b></div>
+      <div class="statline"><span>Gold</span><b>${S.p.gold}</b></div>
+      <div class="statline"><span>Turns</span><b>${S.turn}</b></div>
+    </div>
+    <p class="center big" style="color:var(--gold)">SCORE ${score} ${best?'· ★ NEW BEST!':''}</p>
+    ${!best&&hi.score?`<p class="center" style="color:var(--dim);font-size:12px">best: ${hi.score}</p>`:''}
+    <button class="opt" style="border-color:var(--gold);background:#23210f" onclick="startCreate()"><b>▸ DELVE AGAIN</b></button>
+    <button class="opt" onclick="titleScreen()"><b>↩ Title</b></button>
+  `);
+}
+
+/* ================================ INPUT ================================== */
+document.addEventListener('click',(e)=>{
+  const b=e.target.closest('[data-cmd]'); if(!b) return;
+  if(b.disabled) return;
+  act(b.getAttribute('data-cmd'));
+});
+const KEY={ ArrowUp:'u',ArrowDown:'d',ArrowLeft:'l',ArrowRight:'r',
+  w:'u',s:'d',a:'l',d:'r',
+  h:'l',j:'d',k:'u',l:'r',y:'ul',u:'ur',b:'dl',n:'dr',
+  '.':'center',' ':'center',g:'center',Enter:'center',
+  i:'inv',z:'cast',c:'cast',f:'fire',r:'rest','>':'stairs','<':'stairs','@':'char' };
+document.addEventListener('keydown',(e)=>{
+  if(S&&S.mode!=='play') return;
+  let k=e.key; const cmd=KEY[k]!==undefined?KEY[k]:(KEY[k.toLowerCase()]);
+  if(cmd){ e.preventDefault(); act(cmd); }
+});
+window.addEventListener('resize',()=>{ if(S&&S.p&&S.mode==='play'){ const m=$('map'); m._cell=0; sizeMap(); render(); } });
+
+/* ================================= BOOT ================================== */
+window.__ABYSS={ get S(){return S;}, act, beginGame, _cre, createPlayer, buildLevel, newState };
+titleScreen();
+</script>
+</body>
+</html>
